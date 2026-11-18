@@ -216,6 +216,25 @@ footer p { max-width: 86ch; margin: 0 0 8px; }
 footer .eyebrow { margin-bottom: 8px; }
 .link { background: none; border: 0; padding: 0; color: var(--fg-2); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 
+/* the balance performance is measured on */
+.basis { margin-top: 28px; background: var(--raised); border-top: 2px solid var(--rule); padding: 20px 24px 24px; }
+.basis h2 { margin: 6px 0 0; font: 600 22px/1.25 var(--display); }
+.basis p { margin: 8px 0 0; max-width: 86ch; font-size: 13.5px; color: var(--fg-2); }
+.basis-rows { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 28px; margin-top: 18px; }
+.basis-row { display: grid; gap: 7px; align-content: start; min-width: 0; }
+.basis-row label { display: grid; gap: 2px; font-size: 14px; }
+.basis-row small { font-size: 12.5px; color: var(--fg-3); }
+.amt { display: flex; align-items: center; height: 44px; border: 1px solid var(--line-2); background: var(--bg); }
+.amt span { padding: 0 4px 0 12px; color: var(--fg-3); font-size: 15px; }
+.amt input { flex: 1; min-width: 0; height: 100%; border: 0; background: none; color: var(--fg); padding: 0 12px 0 4px; font: 600 16px var(--text); font-variant-numeric: tabular-nums lining-nums; }
+.amt:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; } .amt input:focus { outline: none; }
+.basis .err { min-height: 0; margin: 0; font-size: 12.5px; }
+.basis-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 22px; margin-top: 20px; }
+.basis-actions .btn { width: auto; margin: 0; padding: 0 22px; }
+.basis-actions .link { font-size: 13.5px; min-height: 44px; }
+.cell .s .link, .big-s .link { font-size: inherit; white-space: nowrap; }
+@media (max-width: 760px) { .basis-rows { grid-template-columns: minmax(0, 1fr); } .basis { padding: 18px 18px 22px; } }
+
 /* sign in (shown only when the owner switches the password back on) */
 .gate { min-height: 100svh; display: grid; place-items: center; padding: 24px 20px; }
 .gate form { width: min(400px, 100%); padding: 28px 28px 26px; border: 1px solid var(--line); border-top: 4px solid var(--rule); }
@@ -263,6 +282,15 @@ footer .eyebrow { margin-bottom: 8px; }
       <nav class="tabs" id="tabs" aria-label="Accounts"></nav>
     </div>
   </header>
+  <div class="wrap" id="basis" hidden>
+    <form class="basis" id="basis-form" novalidate>
+      <div class="kicker">Your call</div>
+      <h2>Which balance should performance be measured on?</h2>
+      <p>Profit and loss stay exactly as traded. The return and drawdown percentages are worked out against the balance you give here, for example the amount you plan to deposit. Leave an account on its starting balance to measure it as it ran. Your choice is kept on this device and can be changed at any time.</p>
+      <div class="basis-rows" id="basis-rows"></div>
+      <div class="basis-actions"><button class="btn" type="submit">Use these balances</button><button class="link" type="button" id="basis-start">Use the starting balances</button></div>
+    </form>
+  </div>
   <main class="wrap" id="view"></main>
   <footer>
     <div class="wrap"><div>
@@ -297,6 +325,36 @@ function pct(v, signed = true, digits = 2) {
 const ratio = (v) => (v == null ? '—' : v.toFixed(2));
 const tone = (v) => (v > 0 ? 'gain' : v < 0 ? 'loss' : '');
 const M = (v, ccy, signed) => `<span class="nw">${money(v, ccy, signed)}</span>`;   // an amount never breaks across lines in running text
+/* <basis-math> */
+/* "Same pounds, new base": profit and loss stay as traded; the account is read as if it had started on the balance
+   the owner chose, so every balance and equity reading moves by the same amount and only the percentages change. */
+function parseAmount(text) {
+  const t = String(text ?? '').trim().replace(/^(US\$|[£$€])\s*/, '').replace(/,/g, '');
+  if (!/^\d{1,9}(\.\d{1,2})?$/.test(t)) return null;
+  const v = Number(t);
+  return v > 0 ? v : null;
+}
+function measure(a, chosen) {
+  const start = a.start_balance, custom = chosen != null && Math.abs(chosen - start) >= 0.005;
+  const base = custom ? chosen : start, shift = base - start;
+  // a fall is measured against the peak it fell from, moved by the same shift; no percentage if that is not above zero
+  const fallPct = (fall, peak, asIs) => (!custom ? asIs : !fall ? 0 : peak == null || peak + shift <= 0 ? null : fall / (peak + shift) * 100);
+  return { start, base, custom,
+    returnPct: custom ? a.stats.net / base * 100 : a.stats.return_pct,
+    equityPct: (v) => (base > 0 ? (v - start) / base * 100 : 0),
+    eqDdPct: fallPct(a.equity_dd, a.equity_dd_peak, a.equity_dd_pct),
+    closedDdPct: fallPct(a.stats.max_dd, a.stats.max_dd_peak, a.stats.max_dd_pct) };
+}
+function measureTotal(accounts, chosen, report) {
+  const T = report.totals; let base = 0, custom = false;
+  for (const a of accounts) {
+    if (!a.rep) continue;
+    const m = measure(a, chosen[a.id]);
+    if (m.custom) { custom = true; base += m.base / (a.rep.converted ? report.rates[a.currency] : 1); } else base += a.rep.start;
+  }
+  return custom ? { custom, base, returnPct: base > 0 ? T.net / base * 100 : null } : { custom, base: T.start, returnPct: T.return_pct };
+}
+/* </basis-math> */
 const pl = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const word = (n) => ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'][n] || String(n);
 const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
@@ -417,6 +475,39 @@ $('login').addEventListener('submit', async (ev) => {
 });
 function start() { $('gate').hidden = true; $('app').hidden = false; tickConn(); poll(); }
 
+/* ------------------------------------------------------------------ the balance performance is measured on */
+let basis = {};                                  // { accountId: { amount, ccy } }, kept on this device only
+try { basis = JSON.parse(store.get('eadesk.basis') || '{}') || {}; } catch { basis = {}; }
+let basisAsked = store.get('eadesk.basisAsked') === '1';
+const chosenFor = (a) => { const b = basis[a.id]; return b && b.ccy === a.currency && typeof b.amount === 'number' ? b.amount : null; };
+const chosenMap = () => Object.fromEntries(snap.accounts.filter((a) => !a.error).map((a) => [a.id, chosenFor(a)]));
+const bz = (a) => measure(a, chosenFor(a));
+function openBasis() {
+  if (!snap) return;
+  $('basis-rows').innerHTML = snap.accounts.filter((a) => !a.error).map((a) => {
+    const i = snap.accounts.indexOf(a), sym = money(0, a.currency).replace(/[\d.,\s]/g, '');
+    return `<div class="basis-row"><label for="b-${esc(a.id)}"><span class="who" style="--c:${SERIES[i % 3]}"><i></i><b>${esc(a.title)}</b></span><small>started at ${money(a.start_balance, a.currency)}${a.currency !== snap.report.currency ? ` · a ${esc(a.currency)} account` : ''}</small></label>
+      <div class="amt"><span>${esc(sym)}</span><input id="b-${esc(a.id)}" data-acct="${esc(a.id)}" inputmode="decimal" autocomplete="off" value="${bz(a).base.toFixed(2)}" aria-describedby="e-${esc(a.id)}"></div>
+      <div class="err" id="e-${esc(a.id)}" role="alert"></div></div>`; }).join('');
+  $('basis').hidden = false;
+}
+function closeBasis() { $('basis').hidden = true; basisAsked = true; store.set('eadesk.basisAsked', '1'); }
+$('basis-form').addEventListener('submit', (ev) => {
+  ev.preventDefault();
+  const next = {}; let bad = null;
+  for (const inp of $('basis-rows').querySelectorAll('input')) {
+    const a = snap.accounts.find((x) => x.id === inp.dataset.acct), v = parseAmount(inp.value), err = $(`e-${inp.dataset.acct}`);
+    if (!a) continue;
+    if (v == null) { err.textContent = 'Enter an amount above zero, such as 2000 or 2,000.50.'; bad = bad || inp; continue; }
+    err.textContent = '';
+    if (Math.abs(v - a.start_balance) >= 0.005) next[a.id] = { amount: v, ccy: a.currency };
+  }
+  if (bad) { bad.focus(); return; }
+  basis = next; store.set('eadesk.basis', Object.keys(next).length ? JSON.stringify(next) : null); closeBasis(); render();
+});
+$('basis-start').addEventListener('click', () => { basis = {}; store.set('eadesk.basis', null); closeBasis(); render(); });
+document.addEventListener('click', (ev) => { if (ev.target.closest('[data-basis-open]')) { openBasis(); scrollTo({ top: 0 }); const first = $('basis-rows').querySelector('input'); if (first) first.focus({ preventScroll: true }); } });
+
 /* ------------------------------------------------------------------ theme */
 function applyTheme(t) { if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme; }
 applyTheme(store.get('eadesk.theme'));
@@ -465,11 +556,12 @@ function renderBanner() {
 
 function render() {
   if (!snap) return;
+  if (!basisAsked && $('basis').hidden) openBasis();     // the first visit: ask before the percentages are read
   const r = route();
   put('since', `since ${esc(snap.cutoff_label)}`);
   put('tabs', `<a class="tab" href="#overview" ${r === 'overview' ? 'aria-current="page"' : ''}>Overview</a>` + snap.accounts.map((a, i) =>
     `<a class="tab" href="#${esc(a.id)}" ${r === a.id ? 'aria-current="page"' : ''}><span class="sw" style="background:${SERIES[i % 3]}"></span>${esc(a.title)} <small>••${esc(a.login_tail)}</small></a>`).join(''));
-  put('foot-a', `Reporting starts ${esc(snap.cutoff_label)} (00:00 broker time); nothing before it is shown or counted. Times are in your local time (${esc(Intl.DateTimeFormat().resolvedOptions().timeZone)}). The terminals publish their figures every 10 seconds.${Object.entries(snap.report.rates).map(([c, r]) => ` The overview and its totals are in ${esc(snap.report.currency)}. ${esc(snap.accounts.filter((a) => a.currency === c).map((a) => a.title).join(', '))} is a ${esc(c)} account, converted at the broker's live rate (1 ${esc(snap.report.currency)} = ${Number(r).toFixed(4)} ${esc(c)}), so its ${esc(snap.report.currency)} figures move a little with the exchange rate; its own page stays in ${esc(c)} to match the terminal.`).join('')}${snap.report.unconverted.length ? ` No exchange rate could be read for ${esc(snap.accounts.filter((a) => snap.report.unconverted.includes(a.id)).map((a) => a.title).join(', '))}: it is shown in its own currency and left out of the total.` : ''}`);
+  put('foot-a', `Reporting starts ${esc(snap.cutoff_label)} (00:00 broker time); nothing before it is shown or counted. Times are in your local time (${esc(Intl.DateTimeFormat().resolvedOptions().timeZone)}). The terminals publish their figures every 10 seconds.${Object.entries(snap.report.rates).map(([c, r]) => ` The overview and its totals are in ${esc(snap.report.currency)}. ${esc(snap.accounts.filter((a) => a.currency === c).map((a) => a.title).join(', '))} is a ${esc(c)} account, converted at the broker's live rate (1 ${esc(snap.report.currency)} = ${Number(r).toFixed(4)} ${esc(c)}), so its ${esc(snap.report.currency)} figures move a little with the exchange rate; its own page stays in ${esc(c)} to match the terminal.`).join('')}${snap.report.unconverted.length ? ` No exchange rate could be read for ${esc(snap.accounts.filter((a) => snap.report.unconverted.includes(a.id)).map((a) => a.title).join(', '))}: it is shown in its own currency and left out of the total.` : ''}${snap.accounts.some((a) => !a.error && bz(a).custom) ? ` On this device, ${esc(snap.accounts.filter((a) => !a.error && bz(a).custom).map((a) => `${a.title} is measured on ${money(bz(a).base, a.currency)}`).join(', '))} instead of the starting balance: profit and loss are as traded, and only the return and drawdown percentages change.` : ''}`);
   if ($('view').dataset.route !== r) { $('view').dataset.route = r; $('view').innerHTML = r === 'overview' ? overviewShell() : accountShell(); for (const k of [...last.keys()]) if (!['since', 'tabs', 'foot-a'].includes(k)) last.delete(k); charts.clear(); }
   if (r === 'overview') renderOverview(); else renderAccount(snap.accounts.find((a) => a.id === r), snap.accounts.findIndex((a) => a.id === r));
   renderBanner(); tickStates(); drawCharts(false);
@@ -481,18 +573,18 @@ const overviewShell = () => `
   <section class="lede"><div class="kicker" id="kicker"></div><h1 id="headline"></h1><ol class="takeaways" id="takeaways"></ol></section>
   <section><div class="strip" id="strip"></div></section>
   ${ex('roster', '<span id="roster-sub"></span>', '<div class="roster" id="roster"></div>', 'Source: each terminal’s run record and the broker’s deal history. Select an account for its full report.')}
-  ${ex('idx', 'Equity return since the start, as a percentage of each account’s own starting balance', '<div class="legend" id="idx-legend"></div><div class="chart" id="idx"></div>', 'Source: account equity as reported by each terminal, sampled every minute.')}
+  ${ex('idx', '<span id="idx-sub"></span>', '<div class="legend" id="idx-legend"></div><div class="chart" id="idx"></div>', 'Source: account equity as reported by each terminal, sampled every minute.')}
   ${ex('latest', '<span id="latest-n"></span>', '<div class="tbl" id="latest"></div>', 'Source: the broker’s deal history. Net is after commission, swap and fees.')}`;
 
 function renderOverview() {
   const ok = snap.accounts.filter((a) => !a.error);
-  const rep = snap.report, R = rep.currency, T = rep.totals, inTotal = ok.filter((a) => a.rep);
+  const rep = snap.report, R = rep.currency, T = rep.totals, inTotal = ok.filter((a) => a.rep), tm = measureTotal(inTotal, chosenMap(), rep);
   const trades = ok.reduce((s, a) => s + a.stats.trades, 0), wins = ok.reduce((s, a) => s + a.stats.wins, 0), losses = ok.reduce((s, a) => s + a.stats.losses, 0);
   const open = ok.reduce((s, a) => s + a.open.length, 0), pending = ok.reduce((s, a) => s + a.status.pending, 0);
   const running = snap.accounts.filter((a) => accountState(a).cls === 'ok').length;
   put('strip', `<div class="cell total"><div class="eyebrow">Total net profit · ${inTotal.length === snap.accounts.length ? `all ${inTotal.length} accounts` : `${inTotal.length} of ${snap.accounts.length} accounts`}</div>
       <div class="v ${tone(T.net)}">${money(T.net, R, true)}</div>
-      <div class="s">${pct(T.return_pct)} on ${money(T.start, R)} at the start · worth ${money(T.equity, R)} now</div>
+      <div class="s">${pct(tm.returnPct)} on ${money(tm.base, R)} ${tm.custom ? 'chosen as the base' : `at the start · worth ${money(T.equity, R)} now`} · <button class="link" type="button" data-basis-open>change the base</button></div>
       <div class="split">${ok.map((a) => { const i = snap.accounts.indexOf(a); return `<a href="#${esc(a.id)}" style="--c:${SERIES[i % 3]}"><i></i>${esc(a.title)} <b class="${tone(a.stats.net)}">${a.rep ? money(a.rep.net, R, true) : money(a.stats.net, a.currency, true)}</b>${a.rep ? '' : '<small>not in the total</small>'}</a>`; }).join('')}</div></div>` +
     `<div class="cell"><div class="eyebrow">Win rate</div><div class="v">${trades ? pct(wins / trades * 100, false, 0) : '—'}</div><div class="s">${wins} won · ${losses} lost · ${trades} closed</div></div>
      <div class="cell"><div class="eyebrow">In the market now</div><div class="v">${open}</div><div class="s">open position${open === 1 ? '' : 's'} · ${pending} resting order${pending === 1 ? '' : 's'}</div></div>
@@ -507,25 +599,26 @@ function renderOverview() {
   put('kicker', `${systems.length === 1 ? `${esc(ok[0].ea.name)} forward test` : 'Forward test'} · demo accounts · since ${cutoff}`);
   put('headline', !n ? 'No account can be read at the moment'
     : !trades ? `No trade has closed since ${cutoff}; ${n === 1 ? 'the account is' : `the ${word(n)} accounts are`} unchanged`
-    : T.net > 0 ? `${subj} up ${M(T.net, R)} (${pct(T.return_pct)}) since ${cutoff}${n > 1 && share >= 50 ? `, with ${esc(top.a.title)} earning ${share}% of the gains` : ''}`
-    : T.net < 0 ? `${subj} down ${M(-T.net, R)} (${pct(T.return_pct)}) since ${cutoff}${n > 1 && bottom.net < 0 ? `, with ${esc(bottom.a.title)} the largest drag` : ''}`
+    : T.net > 0 ? `${subj} up ${M(T.net, R)} (${pct(tm.returnPct)}) since ${cutoff}${n > 1 && share >= 50 ? `, with ${esc(top.a.title)} earning ${share}% of the gains` : ''}`
+    : T.net < 0 ? `${subj} down ${M(-T.net, R)} (${pct(tm.returnPct)}) since ${cutoff}${n > 1 && bottom.net < 0 ? `, with ${esc(bottom.a.title)} the largest drag` : ''}`
     : `${subj} level since ${cutoff}`);
-  const dd = ok.reduce((m, a) => (a.equity_dd_pct > (m ? m.equity_dd_pct : 0) ? a : m), null);
+  const dd = ok.map((a) => ({ a, p: bz(a).eqDdPct })).filter((x) => x.p > 0).sort((x, y) => y.p - x.p)[0];
   put('takeaways', !n ? '' : [
-    `<b>Result.</b> Net profit is ${M(T.net, R, true)} on ${M(T.start, R)} of starting capital (${pct(T.return_pct)}). ${n < 2 ? '' : ahead === n ? `${n === 2 ? 'Both' : `All ${word(n)}`} accounts are ahead.` : ahead === 0 ? `None of the ${word(n)} accounts is ahead.` : `${cap(word(ahead))} of the ${word(n)} accounts ${ahead === 1 ? 'is' : 'are'} ahead.`}`,
+    `<b>Result.</b> Net profit is ${M(T.net, R, true)} on ${M(tm.base, R)} of ${tm.custom ? 'chosen' : 'starting'} capital (${pct(tm.returnPct)}). ${n < 2 ? '' : ahead === n ? `${n === 2 ? 'Both' : `All ${word(n)}`} accounts are ahead.` : ahead === 0 ? `None of the ${word(n)} accounts is ahead.` : `${cap(word(ahead))} of the ${word(n)} accounts ${ahead === 1 ? 'is' : 'are'} ahead.`}`,
     !trades ? '<b>Where it comes from.</b> Nothing has closed yet, so there is no result to attribute.'
       : n < 2 ? `<b>Where it comes from.</b> ${esc(top.a.title)} is the only account reporting.`
       : gains > 0 ? `<b>Where it comes from.</b> ${esc(top.a.title)} contributes ${M(top.net, R, true)}${share == null ? '' : `, ${share}% of the gains`}; ${esc(bottom.a.title)} ${bottom.net < 0 ? `is behind by ${M(-bottom.net, R)}` : `adds the least at ${M(bottom.net, R, true)}`}.`
       : `<b>Where it comes from.</b> ${esc(bottom.a.title)} is the largest drag at ${M(bottom.net, R, true)}.`,
-    `<b>How much to read into it.</b> ${cap(pl(trades, 'trade has', 'trades have'))} closed (${wins} won, ${losses} lost)${trades < 30 * ok.length ? ', too few to rely on win rate or profit factor yet' : ''}. ${dd ? `The deepest equity drawdown is ${pct(dd.equity_dd_pct, false)}, on ${esc(dd.title)}` : 'No account has drawn down'}; ${open ? `${pl(open, 'position is', 'positions are')} open now` : 'nothing is open now'}.`,
+    `<b>How much to read into it.</b> ${cap(pl(trades, 'trade has', 'trades have'))} closed (${wins} won, ${losses} lost)${trades < 30 * ok.length ? ', too few to rely on win rate or profit factor yet' : ''}. ${dd ? `The deepest equity drawdown is ${pct(dd.p, false)}, on ${esc(dd.a.title)}` : 'No account has drawn down'}; ${open ? `${pl(open, 'position is', 'positions are')} open now` : 'nothing is open now'}.`,
   ].map((t) => `<li>${t}</li>`).join(''));
   put('roster-t', !ok.length ? 'Which system each account runs'
     : systems.length === 1 ? (ok.length === 1 ? `The account runs ${esc(systems[0])} on the ${esc(ok[0].ea.preset)} preset` : `${cap(word(ok.length))} accounts run ${esc(systems[0])}, ${presets.size === ok.length ? 'each on its own preset' : 'across ' + pl(presets.size, 'preset', 'presets')}`)
     : 'The accounts run different systems');
   put('roster-sub', `System, preset, engines switched on and result per account; amounts in ${esc(R)}`);
-  const byRet = ok.map((a) => ({ a, r: (a.equity / a.start_balance - 1) * 100 })).sort((x, y) => y.r - x.r);
+  const byRet = ok.map((a) => ({ a, r: bz(a).equityPct(a.equity) })).sort((x, y) => y.r - x.r);
   put('idx-t', !byRet.length ? 'Return since the start' : byRet.length === 1 ? `${esc(byRet[0].a.title)} equity stands ${pct(byRet[0].r)} against its starting balance`
     : `${esc(byRet[0].a.title)} leads on return at ${pct(byRet[0].r)}; ${esc(byRet[byRet.length - 1].a.title)} is last at ${pct(byRet[byRet.length - 1].r)}`);
+  put('idx-sub', `Equity return since the start, as a percentage of ${tm.custom ? 'the balance chosen for each account (its starting balance where none was chosen)' : 'each account’s own starting balance'}`);
   put('latest-t', !trades ? `No trade has closed since ${cutoff}` : trades === 1 ? `The one closed trade ${wins ? 'was profitable' : 'was not profitable'}`
     : wins === trades ? `${trades === 2 ? 'Both' : `All ${word(trades)}`} closed trades were profitable` : `${cap(word(wins))} of ${word(trades)} closed trades were profitable`);
 
@@ -533,7 +626,7 @@ function renderOverview() {
     const c = SERIES[i % 3];
     if (a.error) return `<a class="acct" href="#${esc(a.id)}" style="--c:${c}"><div><div class="acct-name"><b>${esc(a.title)}</b><span class="num">••${esc(a.login_tail)}</span></div><div class="acct-id">${esc(a.terminal)}</div></div><div class="loss">${esc(a.error)}</div><div></div></a>`;
     const s = a.stats, on = a.ea.engines.filter((e) => e.enabled);
-    const conv = a.rep && a.rep.converted, v = a.rep || { net: s.net, balance: a.balance, floating: a.floating }, vc = a.rep ? R : a.currency;
+    const b = bz(a), conv = a.rep && a.rep.converted, v = a.rep || { net: s.net, balance: a.balance, floating: a.floating }, vc = a.rep ? R : a.currency;
     return `<a class="acct" href="#${esc(a.id)}" style="--c:${c}">
       <div>
         <div class="acct-name"><b>${esc(a.title)}</b><span class="num">••${esc(a.login_tail)}</span></div>
@@ -544,7 +637,7 @@ function renderOverview() {
         </div>
       </div>
       <div class="mets">
-        <div class="met"><div class="l">Net profit</div><div class="v ${tone(s.net)}">${money(v.net, vc, true)}</div><div class="s">${pct(s.return_pct)}</div>${conv ? `<div class="s">${money(s.net, a.currency, true)}</div>` : ''}</div>
+        <div class="met"><div class="l">Net profit</div><div class="v ${tone(s.net)}">${money(v.net, vc, true)}</div><div class="s">${pct(b.returnPct)}</div>${b.custom ? `<div class="s">on ${money(b.base, a.currency)}</div>` : ''}${conv ? `<div class="s">${money(s.net, a.currency, true)}</div>` : ''}</div>
         <div class="met"><div class="l">Balance</div><div class="v">${money(v.balance, vc)}</div><div class="s">${a.floating ? `${money(v.floating, vc, true)} open` : 'flat'}</div>${conv ? `<div class="s">${money(a.balance, a.currency)}</div>` : ''}</div>
         <div class="met"><div class="l">Win rate</div><div class="v">${s.win_rate == null ? '—' : pct(s.win_rate, false, 0)}</div><div class="s">${s.wins}W · ${s.losses}L</div></div>
         <div class="met"><div class="l">Profit factor</div><div class="v">${ratio(s.profit_factor)}</div><div class="s">${s.profit_factor == null ? (s.wins ? 'no loss yet' : 'no trades yet') : `${s.trades} trades`}</div></div>
@@ -553,8 +646,8 @@ function renderOverview() {
     </a>`;
   }).join(''));
 
-  put('idx-legend', ok.map((a) => `<span style="--c:${SERIES[snap.accounts.indexOf(a) % 3]}"><i></i>${esc(a.title)} <b class="num ${tone(a.equity - a.start_balance)}">${pct((a.equity / a.start_balance - 1) * 100)}</b></span>`).join(''));
-  setChart('idx', { kind: 'line', unit: 'pct', zero: true, series: ok.map((a) => ({ name: a.title, color: SERIES[snap.accounts.indexOf(a) % 3], pts: a.curve.map((p) => [p[0], (p[1] / a.start_balance - 1) * 100]) })) });
+  put('idx-legend', ok.map((a) => `<span style="--c:${SERIES[snap.accounts.indexOf(a) % 3]}"><i></i>${esc(a.title)} <b class="num ${tone(a.equity - a.start_balance)}">${pct(bz(a).equityPct(a.equity))}</b></span>`).join(''));
+  setChart('idx', { kind: 'line', unit: 'pct', zero: true, series: ok.map((a) => { const e = bz(a).equityPct; return { name: a.title, color: SERIES[snap.accounts.indexOf(a) % 3], pts: a.curve.map((p) => [p[0], e(p[1])]) }; }) });
 
   const all = ok.flatMap((a) => a.trades.map((t) => ({ ...t, acct: a, i: snap.accounts.indexOf(a) }))).sort((x, y) => y.close - x.close);
   put('latest-n', all.length ? `Most recent ${Math.min(12, all.length)} of ${all.length}, newest first; net of costs, in ${esc(R)}` : `Closed trades will be listed here, in ${esc(R)}`);
@@ -583,16 +676,16 @@ function groupTable(rows, ccy, label) {
 function renderAccount(a, i) {
   const c = SERIES[i % 3];
   if (a.error) { put('hero', `<div><div class="eyebrow">${esc(a.terminal)} · ••${esc(a.login_tail)}</div><h1>${esc(a.title)}</h1><p class="loss">This account's files cannot be read: ${esc(a.error)}</p></div><div></div>`); return; }
-  const s = a.stats, ccy = a.currency, m = (v, sg) => money(v, ccy, sg);
+  const s = a.stats, ccy = a.currency, m = (v, sg) => money(v, ccy, sg), base = bz(a);
   const brokerDay = new Date(serverNow() + a.status.offset_h * 3600e3).toISOString().slice(0, 10);
   const today = a.daily.find((d) => d.day === brokerDay) || { net: 0, trades: 0 }, lastT = a.trades[a.trades.length - 1];
   put('hero', `
     <div>
       <div class="kicker">${esc(a.title)} · account ••${esc(a.login_tail)} · ${esc(a.ea.name)} ${esc(a.ea.build)} · ${esc(a.ea.preset)}</div>
-      <h1>${!s.trades ? `${esc(a.title)} has not closed a trade since ${esc(snap.cutoff_label)}` : `${esc(a.title)} is ${s.net > 0 ? 'up' : s.net < 0 ? 'down' : 'level at'} ${m(Math.abs(s.net))} (${pct(s.return_pct)}) after ${pl(s.trades, 'closed trade', 'closed trades')}`}</h1>
+      <h1>${!s.trades ? `${esc(a.title)} has not closed a trade since ${esc(snap.cutoff_label)}` : `${esc(a.title)} is ${s.net > 0 ? 'up' : s.net < 0 ? 'down' : 'level at'} ${m(Math.abs(s.net))} (${pct(base.returnPct)}) after ${pl(s.trades, 'closed trade', 'closed trades')}`}</h1>
       <div><span class="state" data-state="${esc(a.id)}"></span></div>
       <div class="big ${tone(s.net)}">${m(s.net, true)}</div>
-      <div class="big-s"><span><b class="num ${tone(s.return_pct)}">${pct(s.return_pct)}</b> on ${m(a.start_balance)} at the start</span><span>Balance <b class="num">${m(a.balance)}</b></span><span>Equity <b class="num">${m(a.equity)}</b></span>${a.floating ? `<span>Open <b class="num ${tone(a.floating)}">${m(a.floating, true)}</b></span>` : ''}</div>
+      <div class="big-s"><span><b class="num ${tone(s.net)}">${pct(base.returnPct)}</b> on ${m(base.base)} ${base.custom ? `(your figure; it started at ${m(a.start_balance)})` : 'at the start'} · <button class="link" type="button" data-basis-open>change the base</button></span><span>Balance <b class="num">${m(a.balance)}</b></span><span>Equity <b class="num">${m(a.equity)}</b></span>${a.floating ? `<span>Open <b class="num ${tone(a.floating)}">${m(a.floating, true)}</b></span>` : ''}</div>
       ${a.rep && a.rep.converted ? `<div class="big-s"><span>In ${esc(snap.report.currency)} <b class="num ${tone(a.rep.net)}">${money(a.rep.net, snap.report.currency, true)}</b> net</span><span>balance <b class="num">${money(a.rep.balance, snap.report.currency)}</b></span><span>at 1 ${esc(snap.report.currency)} = ${Number(snap.report.rates[ccy]).toFixed(4)} ${esc(ccy)}</span></div>` : ''}
       <div class="now">
         <div><div class="l">Today</div><div class="v ${tone(today.net)}">${m(today.net, true)}</div><div class="s">${today.trades} trade${today.trades === 1 ? '' : 's'} closed</div></div>
@@ -612,11 +705,11 @@ function renderAccount(a, i) {
       <div class="eng">${a.ea.engines.map((e) => `<div class="eng-row ${e.enabled ? 'on' : 'off'}"><span class="dot"></span><div>${esc(e.name)}${e.enabled ? '' : ' · off'}<small>${e.enabled ? esc(e.detail) : ''}</small></div><span class="tag">#${e.magic}</span></div>`).join('')}</div>
     </div>`);
 
-  put('perf-note', `Closed-trade statistics since ${esc(snap.cutoff_label)}, in ${esc(ccy)}${s.trades && s.trades < 30 ? '. With so few trades the ratios will swing; read them as provisional' : ''}`);
+  put('perf-note', `Closed-trade statistics since ${esc(snap.cutoff_label)}, in ${esc(ccy)}${base.custom ? `, with percentages measured on ${m(base.base)}` : ''}${s.trades && s.trades < 30 ? '. With so few trades the ratios will swing; read them as provisional' : ''}`);
   put('perf-t', !s.trades ? 'No trade has closed yet, so there is nothing to measure'
     : s.trades < 30 ? `${s.trades === 1 ? `The one closed trade ${s.wins ? 'won' : 'did not win'}` : s.wins === s.trades ? `${s.trades === 2 ? 'Both' : `All ${word(s.trades)}`} closed trades won` : `${cap(word(s.wins))} of ${word(s.trades)} closed trades won`}; too few to rely on the ratios`
     : `Win rate is ${pct(s.win_rate, false, 0)} over ${s.trades} trades${s.profit_factor == null ? '' : `, with a profit factor of ${ratio(s.profit_factor)}`}`);
-  put('eq-t', `Equity is ${m(a.equity)}${a.equity_dd ? `; the deepest drawdown so far is ${pct(a.equity_dd_pct, false)}` : ' and has not drawn down'}`);
+  put('eq-t', `Equity is ${m(a.equity)}${a.equity_dd ? `; the deepest drawdown so far is ${base.eqDdPct == null ? m(a.equity_dd) : pct(base.eqDdPct, false)}` : ' and has not drawn down'}`);
   const topEng = a.by_engine.reduce((b, g) => (!b || g.net > b.net ? g : b), null), topSym = a.by_symbol.reduce((b, g) => (!b || g.net > b.net ? g : b), null);
   put('by-t', !topEng ? 'No engine has closed a trade yet' : topEng.net > 0 ? `${esc(topEng.name)} is the largest contributor at ${m(topEng.net, true)}${topSym && a.by_symbol.length > 1 && topSym.net > 0 ? `; ${esc(topSym.name)} is the strongest symbol` : ''}` : 'No engine is ahead yet');
   const bestDay = a.daily.reduce((b, d) => (!b || d.net > b.net ? d : b), null);
@@ -629,8 +722,8 @@ function renderAccount(a, i) {
     k('Expectancy', m(s.expectancy, true), 'average net a trade', tone(s.expectancy)),
     k('Average win', m(s.avg_win), s.payoff == null ? 'payoff ratio —' : `payoff ratio ${ratio(s.payoff)}`, s.avg_win ? 'gain' : ''),
     k('Average loss', s.avg_loss == null ? '—' : m(-s.avg_loss), s.losses ? `${s.losses} losing trade${s.losses > 1 ? 's' : ''}` : 'none yet', s.avg_loss ? 'loss' : ''),
-    k('Max drawdown', a.equity_dd ? pct(-a.equity_dd_pct) : '0.00%', `${m(a.equity_dd)} of equity, peak to valley`, a.equity_dd ? 'loss' : ''),
-    k('Closed-trade drawdown', s.max_dd ? pct(-s.max_dd_pct) : '0.00%', `${m(s.max_dd)} on balance${s.recovery == null ? '' : ` · recovery ${ratio(s.recovery)}`}`, s.max_dd ? 'loss' : ''),
+    k('Max drawdown', a.equity_dd ? (base.eqDdPct == null ? '—' : pct(-base.eqDdPct)) : '0.00%', `${m(a.equity_dd)} of equity, peak to valley`, a.equity_dd ? 'loss' : ''),
+    k('Closed-trade drawdown', s.max_dd ? (base.closedDdPct == null ? '—' : pct(-base.closedDdPct)) : '0.00%', `${m(s.max_dd)} on balance${s.recovery == null ? '' : ` · recovery ${ratio(s.recovery)}`}`, s.max_dd ? 'loss' : ''),
     k('Best trade', m(s.best, true), '', tone(s.best)),
     k('Worst trade', m(s.worst, true), '', tone(s.worst)),
     k('Average hold', dur(s.avg_hold_s), `${ratio(s.lots)} lots traded`),
