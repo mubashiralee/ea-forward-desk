@@ -232,7 +232,11 @@ footer .eyebrow { margin-bottom: 8px; }
 .basis-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 22px; margin-top: 20px; }
 .basis-actions .btn { width: auto; margin: 0; padding: 0 22px; }
 .basis-actions .link { font-size: 13.5px; min-height: 44px; }
-.cell .s .link, .big-s .link { font-size: inherit; white-space: nowrap; }
+.set-btn { display: inline-flex; align-items: center; min-height: 32px; padding: 0 14px; border: 1px solid var(--fg); background: var(--bg); color: var(--fg); font-size: 13px; font-weight: 600; white-space: nowrap; cursor: pointer; transition: background-color 140ms ease, color 140ms ease, transform 140ms var(--ease-out); }
+.set-btn:active { transform: scale(.97); }
+@media (hover: hover) and (pointer: fine) { .set-btn:hover { background: var(--fg); color: var(--bg); } }
+.base-line { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-top: 14px; font-size: 12.5px; color: var(--fg-3); }
+@media (max-width: 720px) { .bar-set { display: none; } .set-btn { min-height: 40px; } }   /* small screens: the button under the figures */
 @media (max-width: 760px) { .basis-rows { grid-template-columns: minmax(0, 1fr); } .basis { padding: 18px 18px 22px; } }
 
 /* sign in (shown only when the owner switches the password back on) */
@@ -275,6 +279,7 @@ footer .eyebrow { margin-bottom: 8px; }
         <div class="since" id="since"></div>
         <div class="grow"></div>
         <div class="pill wait" id="conn" role="status"><span class="dot"></span><span id="conn-t">Connecting</span></div>
+        <button class="set-btn bar-set" type="button" data-basis-open>Change balances</button>
         <button class="icon-btn" id="theme" type="button" aria-label="Switch between light and dark" title="Light / dark">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.2" stroke="currentColor" stroke-width="1.4"/><path d="M8 1.8a6.2 6.2 0 0 0 0 12.4z" fill="currentColor"/></svg>
         </button>
@@ -286,7 +291,7 @@ footer .eyebrow { margin-bottom: 8px; }
     <form class="basis" id="basis-form" novalidate>
       <div class="kicker">Your call</div>
       <h2>Which balance should performance be measured on?</h2>
-      <p>Profit and loss stay exactly as traded. The return and drawdown percentages are worked out against the balance you give here, for example the amount you plan to deposit. Leave an account on its starting balance to measure it as it ran. Your choice is kept on this device and can be changed at any time.</p>
+      <p>Profit and loss stay exactly as traded. The return and drawdown percentages are worked out against the balance you give here, for example the amount you plan to deposit. Leave an account on its starting balance to measure it as it ran. Your choice is kept on this device; “Change balances” reopens this at any time.</p>
       <div class="basis-rows" id="basis-rows"></div>
       <div class="basis-actions"><button class="btn" type="submit">Use these balances</button><button class="link" type="button" id="basis-start">Use the starting balances</button></div>
     </form>
@@ -588,7 +593,8 @@ function renderOverview() {
   const running = snap.accounts.filter((a) => accountState(a).cls === 'ok').length;
   put('strip', `<div class="cell total"><div class="eyebrow">Total net profit · ${inTotal.length === snap.accounts.length ? `all ${inTotal.length} accounts` : `${inTotal.length} of ${snap.accounts.length} accounts`}</div>
       <div class="v ${tone(T.net)}">${money(T.net, R, true)}</div>
-      <div class="s">${pct(tm.returnPct)} on ${money(tm.base, R)} ${tm.custom ? 'chosen as the base' : 'at the start'} · worth ${money(tm.equity, R)} now · <button class="link" type="button" data-basis-open>change the base</button></div>
+      <div class="s">${pct(tm.returnPct)} on ${money(tm.base, R)} ${tm.custom ? 'chosen as the base' : 'at the start'} · worth ${money(tm.equity, R)} now</div>
+      <div class="base-line"><button class="set-btn" type="button" data-basis-open>Change balances</button><span>${tm.custom ? 'Measured on the balances you chose' : 'Measured on the starting balances'}</span></div>
       <div class="split">${ok.map((a) => { const i = snap.accounts.indexOf(a); return `<a href="#${esc(a.id)}" style="--c:${SERIES[i % 3]}"><i></i>${esc(a.title)} <b class="${tone(a.stats.net)}">${a.rep ? money(a.rep.net, R, true) : money(a.stats.net, a.currency, true)}</b>${a.rep ? '' : '<small>not in the total</small>'}</a>`; }).join('')}</div></div>` +
     `<div class="cell"><div class="eyebrow">Win rate</div><div class="v">${trades ? pct(wins / trades * 100, false, 0) : '—'}</div><div class="s">${wins} won · ${losses} lost · ${trades} closed</div></div>
      <div class="cell"><div class="eyebrow">In the market now</div><div class="v">${open}</div><div class="s">open position${open === 1 ? '' : 's'} · ${pending} resting order${pending === 1 ? '' : 's'}</div></div>
@@ -690,8 +696,9 @@ function renderAccount(a, i) {
       <h1>${!s.trades ? `${esc(a.title)} has not closed a trade since ${esc(snap.cutoff_label)}` : `${esc(a.title)} is ${s.net > 0 ? 'up' : s.net < 0 ? 'down' : 'level at'} ${m(Math.abs(s.net))} (${pct(base.returnPct)}) after ${pl(s.trades, 'closed trade', 'closed trades')}`}</h1>
       <div><span class="state" data-state="${esc(a.id)}"></span></div>
       <div class="big ${tone(s.net)}">${m(s.net, true)}</div>
-      <div class="big-s"><span><b class="num ${tone(s.net)}">${pct(base.returnPct)}</b> on ${m(base.base)} ${base.custom ? `(your figure; it started at ${m(a.start_balance)})` : 'at the start'} · <button class="link" type="button" data-basis-open>change the base</button></span><span>Balance <b class="num">${m(base.bal(a.balance))}</b></span><span>Equity <b class="num">${m(base.bal(a.equity))}</b></span>${a.floating ? `<span>Open <b class="num ${tone(a.floating)}">${m(a.floating, true)}</b></span>` : ''}</div>
+      <div class="big-s"><span><b class="num ${tone(s.net)}">${pct(base.returnPct)}</b> on ${m(base.base)} ${base.custom ? `(your figure; it started at ${m(a.start_balance)})` : 'at the start'}</span><span>Balance <b class="num">${m(base.bal(a.balance))}</b></span><span>Equity <b class="num">${m(base.bal(a.equity))}</b></span>${a.floating ? `<span>Open <b class="num ${tone(a.floating)}">${m(a.floating, true)}</b></span>` : ''}</div>
       ${a.rep && a.rep.converted ? `<div class="big-s"><span>In ${esc(snap.report.currency)} <b class="num ${tone(a.rep.net)}">${money(a.rep.net, snap.report.currency, true)}</b> net</span><span>balance <b class="num">${money(a.rep.balance + shiftInReport(a, base, snap.report), snap.report.currency)}</b></span><span>at 1 ${esc(snap.report.currency)} = ${Number(snap.report.rates[ccy]).toFixed(4)} ${esc(ccy)}</span></div>` : ''}
+      <div class="base-line"><button class="set-btn" type="button" data-basis-open>Change balance</button><span>${base.custom ? `Measured on ${m(base.base)}, your figure` : 'Measured on the starting balance'}</span></div>
       <div class="now">
         <div><div class="l">Today</div><div class="v ${tone(today.net)}">${m(today.net, true)}</div><div class="s">${today.trades} trade${today.trades === 1 ? '' : 's'} closed</div></div>
         <div><div class="l">In the market</div><div class="v">${a.open.length} open</div><div class="s">${a.status.pending} resting order${a.status.pending === 1 ? '' : 's'}</div></div>
