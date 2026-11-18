@@ -95,10 +95,19 @@ main > *, section > *, .two > * { min-width: 0; }
 .banner b { color: var(--warn); font-weight: 600; }
 
 /* summary strip */
-.strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); }
+.strip { display: grid; grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); }
 .cell { background: var(--surface); padding: 16px 18px; min-width: 0; }
 .cell .v { font: 500 26px/1.15 var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -.03em; margin-top: 6px; white-space: nowrap; }
 .cell .s { font-size: 12px; color: var(--fg-3); margin-top: 4px; }
+.split { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--line); font-size: 12.5px; }
+.split a { display: inline-flex; align-items: center; gap: 7px; color: var(--fg-2); text-decoration: none; white-space: nowrap; }
+.split a i { width: 8px; height: 8px; border-radius: 2px; background: var(--c); }
+.split a b { font: 500 12.5px var(--mono); font-variant-numeric: tabular-nums; }
+.split a small { color: var(--fg-3); font-size: 11.5px; }
+@media (hover: hover) { .split a:hover { color: var(--fg); } }
+@media (max-width: 900px) { .strip { grid-template-columns: repeat(3, minmax(0, 1fr)); } .cell.total { grid-column: 1 / -1; } }
+@media (max-width: 480px) { .strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } .strip > .cell:last-child { grid-column: 1 / -1; } }
+@media (max-width: 372px) { .strip { grid-template-columns: minmax(0, 1fr); } }
 
 /* roster */
 .roster { display: grid; gap: 12px; }
@@ -126,6 +135,7 @@ main > *, section > *, .two > * { min-width: 0; }
 .state.ok .dot { background: var(--gain); } .state.bad .dot { background: var(--loss); } .state.bad { color: var(--loss); }
 @media (max-width: 900px) { .acct { grid-template-columns: 1fr; gap: 16px; } .spark { justify-items: start; grid-auto-flow: column; justify-content: space-between; align-items: center; } }
 @media (max-width: 480px) { .mets { grid-template-columns: repeat(2, minmax(0, 1fr)); } .since { display: none; } .brand { font-size: 21px; } }
+@media (max-width: 380px) { .brand { font-size: 17px; } .bar-top { gap: 8px; } }   /* the smallest phones: title, live pill and theme button on one line */
 
 /* charts */
 .chart-card { padding: 18px 20px 12px; }
@@ -295,6 +305,7 @@ const EXIT = { tp: 'Take profit', sl: 'Stop loss', trail: 'Trailed stop', ea: 'C
 const ON_PAGES = location.hostname.endsWith('github.io');
 let API = '';              // same origin when the Mac serves the page; the tunnel when GitHub Pages does
 let token = store.get('eadesk.token');
+let open = store.get('eadesk.open') === '1';   // the owner switched the password off: no gate, no token
 let snap = null, version = 0, skew = 0, lastOk = 0, buildError = null, running = false, ctrl = null;
 
 async function findApi() {
@@ -329,14 +340,14 @@ async function poll() {
   if (running) return;
   running = true;
   let fails = 0;
-  while (running && token) {
+  while (running && (token || open)) {
     try {
       if (ON_PAGES && (!API || fails >= 2)) API = await findApi();
       ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 40000);
-      const r = await fetch(`${API}/api/snapshot?v=${version}&wait=${snap ? 25 : 0}`, { headers: { Authorization: `Bearer ${token}` }, signal: ctrl.signal, cache: 'no-store' });
+      const r = await fetch(`${API}/api/snapshot?v=${version}&wait=${snap ? 25 : 0}`, { headers: open ? {} : { Authorization: `Bearer ${token}` }, signal: ctrl.signal, cache: 'no-store' });
       clearTimeout(timer);
-      if (r.status === 401) { signOut('Your session has ended. Sign in again.'); return; }
+      if (r.status === 401) { const wasOpen = open; setOpen(false); signOut(wasOpen ? 'The desk now asks for its password.' : 'Your session has ended. Sign in again.'); return; }
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const j = await r.json();
       skew = j.now - Date.now(); lastOk = Date.now(); fails = 0; lastFail = false;
@@ -352,10 +363,17 @@ async function poll() {
   running = false;
 }
 function stopPoll() { running = false; if (ctrl) ctrl.abort(); }
-document.addEventListener('visibilitychange', () => { if (document.hidden) stopPoll(); else if (token) setTimeout(poll, 50); });
-setInterval(() => { if (token) tickConn(); if (snap) tickStates(); }, 1000);
+document.addEventListener('visibilitychange', () => { if (document.hidden) stopPoll(); else if (token || open) setTimeout(poll, 50); });
+setInterval(() => { if (token || open) tickConn(); if (snap) tickStates(); }, 1000);
 
 /* ------------------------------------------------------------------ sign in / out */
+function setOpen(v) { open = v; store.set('eadesk.open', v ? '1' : null); $('out').hidden = v; }
+async function askOpen() {
+  if (ON_PAGES) API = await findApi();
+  const r = await fetch(`${API}/api/health`, { cache: 'no-store' });
+  if (!r.ok) throw new Error(`health ${r.status}`);
+  setOpen((await r.json()).open === true);
+}
 function showGate(msg) { $('app').hidden = true; $('gate').hidden = false; $('err').textContent = msg || ''; setTimeout(() => $('pw').focus(), 30); }
 function signOut(msg) { stopPoll(); token = null; snap = null; version = 0; store.set('eadesk.token', null); $('view').innerHTML = ''; last.clear(); showGate(msg); }
 $('out').addEventListener('click', () => signOut(''));
@@ -428,7 +446,7 @@ function render() {
   put('since', `since ${esc(snap.cutoff_label)}`);
   put('tabs', `<a class="tab" href="#overview" ${r === 'overview' ? 'aria-current="page"' : ''}>Overview</a>` + snap.accounts.map((a, i) =>
     `<a class="tab" href="#${esc(a.id)}" ${r === a.id ? 'aria-current="page"' : ''}><span class="sw" style="background:${SERIES[i % 3]}"></span>${esc(a.title)} <small>••${esc(a.login_tail)}</small></a>`).join(''));
-  put('foot-a', `Reporting starts ${esc(snap.cutoff_label)} (00:00 broker time); nothing before it is shown or counted. Times are in your local time (${esc(Intl.DateTimeFormat().resolvedOptions().timeZone)}). The terminals publish their figures every 10 seconds.`);
+  put('foot-a', `Reporting starts ${esc(snap.cutoff_label)} (00:00 broker time); nothing before it is shown or counted. Times are in your local time (${esc(Intl.DateTimeFormat().resolvedOptions().timeZone)}). The terminals publish their figures every 10 seconds.${Object.entries(snap.report.rates).map(([c, r]) => ` The overview and its totals are in ${esc(snap.report.currency)}. ${esc(snap.accounts.filter((a) => a.currency === c).map((a) => a.title).join(', '))} is a ${esc(c)} account, converted at the broker's live rate (1 ${esc(snap.report.currency)} = ${Number(r).toFixed(4)} ${esc(c)}), so its ${esc(snap.report.currency)} figures move a little with the exchange rate; its own page stays in ${esc(c)} to match the terminal.`).join('')}${snap.report.unconverted.length ? ` No exchange rate could be read for ${esc(snap.accounts.filter((a) => snap.report.unconverted.includes(a.id)).map((a) => a.title).join(', '))}: it is shown in its own currency and left out of the total.` : ''}`);
   if ($('view').dataset.route !== r) { $('view').dataset.route = r; $('view').innerHTML = r === 'overview' ? overviewShell() : accountShell(); for (const k of [...last.keys()]) if (!['since', 'tabs', 'foot-a'].includes(k)) last.delete(k); charts.clear(); }
   if (r === 'overview') renderOverview(); else renderAccount(snap.accounts.find((a) => a.id === r), snap.accounts.findIndex((a) => a.id === r));
   renderBanner(); tickStates(); drawCharts(false);
@@ -439,18 +457,20 @@ const overviewShell = () => `
   <div id="banner" hidden style="display:grid;gap:8px"></div>
   <section><div class="strip" id="strip"></div></section>
   <section><div class="h"><h2>Which account runs what</h2><p>Select an account for its full report</p></div><div class="roster" id="roster"></div></section>
-  <section><div class="h"><h2>Return since the start</h2><p>Equity against each account's own starting balance, so GBP and USD accounts compare fairly</p></div>
+  <section><div class="h"><h2>Return since the start</h2><p>Equity against each account's own starting balance, so accounts of different sizes and currencies compare fairly</p></div>
     <div class="card chart-card"><div class="legend" id="idx-legend"></div><div class="chart" id="idx"></div></div></section>
   <section><div class="h"><h2>Latest closed trades</h2><p id="latest-n"></p></div><div class="card tbl" id="latest"></div></section>`;
 
 function renderOverview() {
   const ok = snap.accounts.filter((a) => !a.error);
-  const byCcy = new Map();
-  for (const a of ok) { const c = byCcy.get(a.currency) || { net: 0, start: 0, float: 0, n: 0 }; c.net += a.stats.net; c.start += a.start_balance; c.float += a.floating; c.n += 1; byCcy.set(a.currency, c); }
+  const rep = snap.report, R = rep.currency, T = rep.totals, inTotal = ok.filter((a) => a.rep);
   const trades = ok.reduce((s, a) => s + a.stats.trades, 0), wins = ok.reduce((s, a) => s + a.stats.wins, 0), losses = ok.reduce((s, a) => s + a.stats.losses, 0);
   const open = ok.reduce((s, a) => s + a.open.length, 0), pending = ok.reduce((s, a) => s + a.status.pending, 0);
   const running = snap.accounts.filter((a) => accountState(a).cls === 'ok').length;
-  put('strip', [...byCcy].map(([ccy, c]) => `<div class="cell"><div class="eyebrow">Net profit · ${esc(ccy)}</div><div class="v ${tone(c.net)}">${money(c.net, ccy, true)}</div><div class="s">${pct(c.start ? c.net / c.start * 100 : null)} on ${money(c.start, ccy)} · ${c.n} account${c.n > 1 ? 's' : ''}</div></div>`).join('') +
+  put('strip', `<div class="cell total"><div class="eyebrow">Total net profit · ${inTotal.length === snap.accounts.length ? `all ${inTotal.length} accounts` : `${inTotal.length} of ${snap.accounts.length} accounts`}</div>
+      <div class="v ${tone(T.net)}">${money(T.net, R, true)}</div>
+      <div class="s">${pct(T.return_pct)} on ${money(T.start, R)} at the start · worth ${money(T.equity, R)} now</div>
+      <div class="split">${ok.map((a) => { const i = snap.accounts.indexOf(a); return `<a href="#${esc(a.id)}" style="--c:${SERIES[i % 3]}"><i></i>${esc(a.title)} <b class="${tone(a.stats.net)}">${a.rep ? money(a.rep.net, R, true) : money(a.stats.net, a.currency, true)}</b>${a.rep ? '' : '<small>not in the total</small>'}</a>`; }).join('')}</div></div>` +
     `<div class="cell"><div class="eyebrow">Win rate</div><div class="v">${trades ? pct(wins / trades * 100, false, 0) : '—'}</div><div class="s">${wins} won · ${losses} lost · ${trades} closed</div></div>
      <div class="cell"><div class="eyebrow">In the market now</div><div class="v">${open}</div><div class="s">open position${open === 1 ? '' : 's'} · ${pending} resting order${pending === 1 ? '' : 's'}</div></div>
      <div class="cell"><div class="eyebrow">Terminals</div><div class="v">${running}<span class="dim"> / ${snap.accounts.length}</span></div><div class="s">${running === snap.accounts.length ? 'all running and connected' : 'needs attention'}</div></div>`);
@@ -459,18 +479,19 @@ function renderOverview() {
     const c = SERIES[i % 3];
     if (a.error) return `<a class="card acct" href="#${esc(a.id)}" style="--c:${c}"><div><div class="acct-name"><b>${esc(a.title)}</b><span class="num">••${esc(a.login_tail)}</span></div><div class="acct-id">${esc(a.terminal)}</div></div><div class="loss">${esc(a.error)}</div><div></div></a>`;
     const s = a.stats, on = a.ea.engines.filter((e) => e.enabled);
+    const conv = a.rep && a.rep.converted, v = a.rep || { net: s.net, balance: a.balance, floating: a.floating }, vc = a.rep ? R : a.currency;
     return `<a class="card acct" href="#${esc(a.id)}" style="--c:${c}">
       <div>
         <div class="acct-name"><b>${esc(a.title)}</b><span class="num">••${esc(a.login_tail)}</span></div>
-        <div class="acct-id">${esc(a.server)} · ${esc(a.currency)} · 1:${a.leverage} · ${esc(a.mode)} · ${esc(a.terminal)}</div>
+        <div class="acct-id">${esc(a.server)} · ${esc(a.currency)}${conv ? ` account, shown in ${esc(R)}` : ''} · 1:${a.leverage} · ${esc(a.mode)} · ${esc(a.terminal)}</div>
         <div class="runs">
           <div class="ea">${esc(a.ea.name)} <span>${esc(a.ea.build)} · preset</span> ${esc(a.ea.preset)} <span style="white-space:nowrap">· ${esc(a.ea.chart)}</span></div>
           <div class="chips">${on.map((e) => `<span class="chip">${esc(e.name)} <span class="num">#${e.magic}</span></span>`).join('') || '<span class="chip off">no engine switched on</span>'}</div>
         </div>
       </div>
       <div class="mets">
-        <div class="met"><div class="l">Net profit</div><div class="v ${tone(s.net)}">${money(s.net, a.currency, true)}</div><div class="s">${pct(s.return_pct)}</div></div>
-        <div class="met"><div class="l">Balance</div><div class="v">${money(a.balance, a.currency)}</div><div class="s">${a.floating ? `${money(a.floating, a.currency, true)} open` : 'flat'}</div></div>
+        <div class="met"><div class="l">Net profit</div><div class="v ${tone(s.net)}">${money(v.net, vc, true)}</div><div class="s">${pct(s.return_pct)}</div>${conv ? `<div class="s">${money(s.net, a.currency, true)}</div>` : ''}</div>
+        <div class="met"><div class="l">Balance</div><div class="v">${money(v.balance, vc)}</div><div class="s">${a.floating ? `${money(v.floating, vc, true)} open` : 'flat'}</div>${conv ? `<div class="s">${money(a.balance, a.currency)}</div>` : ''}</div>
         <div class="met"><div class="l">Win rate</div><div class="v">${s.win_rate == null ? '—' : pct(s.win_rate, false, 0)}</div><div class="s">${s.wins}W · ${s.losses}L</div></div>
         <div class="met"><div class="l">Profit factor</div><div class="v">${ratio(s.profit_factor)}</div><div class="s">${s.profit_factor == null ? (s.wins ? 'no loss yet' : 'no trades yet') : `${s.trades} trades`}</div></div>
       </div>
@@ -484,7 +505,7 @@ function renderOverview() {
   const all = ok.flatMap((a) => a.trades.map((t) => ({ ...t, acct: a, i: snap.accounts.indexOf(a) }))).sort((x, y) => y.close - x.close);
   put('latest-n', all.length ? `${Math.min(12, all.length)} of ${all.length}` : '');
   put('latest', all.length ? `<table><thead><tr><th>Closed</th><th>Account</th><th>Symbol</th><th>Side</th><th class="r">Lots</th><th>Engine</th><th>Exit</th><th class="r">Held</th><th class="r">Net</th></tr></thead><tbody>${all.slice(0, 12).map((t) =>
-    `<tr><td>${when(t.close)}</td><td><span class="who" style="--c:${SERIES[t.i % 3]}"><i></i>${esc(t.acct.title)}</span></td><td class="sym">${esc(t.symbol)}</td><td><span class="side ${t.side}">${t.side}</span></td><td class="r">${esc(t.lots)}</td><td>${esc(t.engine)}</td><td>${esc(EXIT[t.exit] || t.exit)}</td><td class="r">${dur(t.hold_s)}</td><td class="r ${tone(t.net)}">${money(t.net, t.acct.currency, true)}</td></tr>`).join('')}</tbody></table>`
+    `<tr><td>${when(t.close)}</td><td><span class="who" style="--c:${SERIES[t.i % 3]}"><i></i>${esc(t.acct.title)}</span></td><td class="sym">${esc(t.symbol)}</td><td><span class="side ${t.side}">${t.side}</span></td><td class="r">${esc(t.lots)}</td><td>${esc(t.engine)}</td><td>${esc(EXIT[t.exit] || t.exit)}</td><td class="r">${dur(t.hold_s)}</td><td class="r ${tone(t.net)}"${t.net_rep != null && t.acct.currency !== R ? ` title="${esc(money(t.net, t.acct.currency, true))} in the account's own currency"` : ''}>${t.net_rep != null ? money(t.net_rep, R, true) : money(t.net, t.acct.currency, true)}</td></tr>`).join('')}</tbody></table>`
     : `<div class="empty">No trade has closed since ${esc(snap.cutoff_label)} yet.</div>`);
 }
 
@@ -522,6 +543,7 @@ function renderAccount(a, i) {
       <div><span class="state" data-state="${esc(a.id)}"></span></div>
       <div class="big ${tone(s.net)}">${m(s.net, true)}</div>
       <div class="big-s"><span><b class="num ${tone(s.return_pct)}">${pct(s.return_pct)}</b> on ${m(a.start_balance)}</span><span>Balance <b class="num">${m(a.balance)}</b></span><span>Equity <b class="num">${m(a.equity)}</b></span>${a.floating ? `<span>Open <b class="num ${tone(a.floating)}">${m(a.floating, true)}</b></span>` : ''}</div>
+      ${a.rep && a.rep.converted ? `<div class="big-s"><span>In ${esc(snap.report.currency)} <b class="num ${tone(a.rep.net)}">${money(a.rep.net, snap.report.currency, true)}</b> net</span><span>balance <b class="num">${money(a.rep.balance, snap.report.currency)}</b></span><span>at 1 ${esc(snap.report.currency)} = ${Number(snap.report.rates[ccy]).toFixed(4)} ${esc(ccy)}</span></div>` : ''}
       <div class="now">
         <div><div class="l">Today</div><div class="v ${tone(today.net)}">${m(today.net, true)}</div><div class="s">${today.trades} trade${today.trades === 1 ? '' : 's'} closed</div></div>
         <div><div class="l">In the market</div><div class="v">${a.open.length} open</div><div class="s">${a.status.pending} resting order${a.status.pending === 1 ? '' : 's'}</div></div>
@@ -676,7 +698,9 @@ function drawBars(el, spec, W) {
 }
 
 /* ------------------------------------------------------------------ go */
-if (token) start(); else showGate('');
+$('out').hidden = open;
+if (open || token) { start(); askOpen().catch(() => {}); }   // a wrong guess here is corrected by the first 401
+else askOpen().then(() => (open ? start() : showGate('')), () => showGate(''));
 </script>
 </body>
 </html>
