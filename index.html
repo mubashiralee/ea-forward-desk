@@ -22,7 +22,7 @@
   --accent: #2251FF; --accent-ink: #FFFFFF;
   --gain: #0B7A53; --loss: #C22D3A; --warn: #8A5A00;
   --gain-bg: rgba(11,122,83,.09); --loss-bg: rgba(194,45,58,.08); --warn-bg: #FFF7E3;
-  --s1: #1F47E5; --s2: #0F9AD6; --s3: #E0457B;
+  --s1: #1F47E5; --s2: #0F9AD6; --s3: #E0457B; --s4: #C97A00;
   --display: "Source Serif 4", "Source Serif Pro", Georgia, "Times New Roman", serif;
   --text: "Public Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --mono: var(--text);
@@ -35,7 +35,7 @@
   --accent: #5FB8FF; --accent-ink: #051C2C;
   --gain: #3CC592; --loss: #FF7381; --warn: #F2B544;
   --gain-bg: rgba(60,197,146,.12); --loss-bg: rgba(255,115,129,.12); --warn-bg: rgba(242,181,68,.12);
-  --s1: #4466F2; --s2: #12A5C4; --s3: #DB5A8E;
+  --s1: #4466F2; --s2: #12A5C4; --s3: #DB5A8E; --s4: #E5A93B;
 } }
 :root[data-theme="dark"] {
   color-scheme: dark;
@@ -44,7 +44,7 @@
   --accent: #5FB8FF; --accent-ink: #051C2C;
   --gain: #3CC592; --loss: #FF7381; --warn: #F2B544;
   --gain-bg: rgba(60,197,146,.12); --loss-bg: rgba(255,115,129,.12); --warn-bg: rgba(242,181,68,.12);
-  --s1: #4466F2; --s2: #12A5C4; --s3: #DB5A8E;
+  --s1: #4466F2; --s2: #12A5C4; --s3: #DB5A8E; --s4: #E5A93B;
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -220,7 +220,7 @@ footer .eyebrow { margin-bottom: 8px; }
 .basis { margin-top: 28px; background: var(--raised); border-top: 2px solid var(--rule); padding: 20px 24px 24px; }
 .basis h2 { margin: 6px 0 0; font: 600 22px/1.25 var(--display); }
 .basis p { margin: 8px 0 0; max-width: 86ch; font-size: 13.5px; color: var(--fg-2); }
-.basis-rows { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 28px; margin-top: 18px; }
+.basis-rows { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px 28px; margin-top: 18px; }
 .basis-row { display: grid; gap: 7px; align-content: start; min-width: 0; }
 .basis-row label { display: grid; gap: 2px; font-size: 14px; }
 .basis-row small { font-size: 12.5px; color: var(--fg-3); }
@@ -312,7 +312,7 @@ footer .eyebrow { margin-bottom: 8px; }
 /* ------------------------------------------------------------------ small helpers */
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const SERIES = ['var(--s1)', 'var(--s2)', 'var(--s3)'];
+const SERIES = ['var(--s1)', 'var(--s2)', 'var(--s3)', 'var(--s4)'];
 const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch { /* private window: the session just does not persist */ } } };
 
 const fmtCache = new Map();
@@ -495,7 +495,7 @@ function openBasis() {
   if (!snap) return;
   $('basis-rows').innerHTML = snap.accounts.filter((a) => !a.error).map((a) => {
     const i = snap.accounts.indexOf(a), sym = money(0, a.currency).replace(/[\d.,\s]/g, '');
-    return `<div class="basis-row"><label for="b-${esc(a.id)}"><span class="who" style="--c:${SERIES[i % 3]}"><i></i><b>${esc(a.title)}</b></span><small>started at ${money(a.start_balance, a.currency)}${a.currency !== snap.report.currency ? ` · a ${esc(a.currency)} account` : ''}</small></label>
+    return `<div class="basis-row"><label for="b-${esc(a.id)}"><span class="who" style="--c:${SERIES[i % SERIES.length]}"><i></i><b>${esc(a.title)}</b></span><small>started at ${money(a.start_balance, a.currency)}${a.currency !== snap.report.currency ? ` · a ${esc(a.currency)} account` : ''}</small></label>
       <div class="amt"><span>${esc(sym)}</span><input id="b-${esc(a.id)}" data-acct="${esc(a.id)}" inputmode="decimal" autocomplete="off" value="${bz(a).base.toFixed(2)}" aria-describedby="e-${esc(a.id)}"></div>
       <div class="err" id="e-${esc(a.id)}" role="alert"></div></div>`; }).join('');
   $('basis').hidden = false;
@@ -569,7 +569,7 @@ function render() {
   const r = route();
   put('since', `since ${esc(snap.cutoff_label)}`);
   put('tabs', `<a class="tab" href="#overview" ${r === 'overview' ? 'aria-current="page"' : ''}>Overview</a>` + snap.accounts.map((a, i) =>
-    `<a class="tab" href="#${esc(a.id)}" ${r === a.id ? 'aria-current="page"' : ''}><span class="sw" style="background:${SERIES[i % 3]}"></span>${esc(a.title)} <small>••${esc(a.login_tail)}</small></a>`).join(''));
+    `<a class="tab" href="#${esc(a.id)}" ${r === a.id ? 'aria-current="page"' : ''}><span class="sw" style="background:${SERIES[i % SERIES.length]}"></span>${esc(a.title)} <small>••${esc(a.login_tail)}</small></a>`).join(''));
   put('foot-a', `Reporting starts ${esc(snap.cutoff_label)} (00:00 broker time); nothing before it is shown or counted. Times are in your local time (${esc(Intl.DateTimeFormat().resolvedOptions().timeZone)}). The terminals publish their figures every 10 seconds.${Object.entries(snap.report.rates).map(([c, r]) => ` The overview and its totals are in ${esc(snap.report.currency)}. ${esc(snap.accounts.filter((a) => a.currency === c).map((a) => a.title).join(', '))} is a ${esc(c)} account, converted at the broker's live rate (1 ${esc(snap.report.currency)} = ${Number(r).toFixed(4)} ${esc(c)}), so its ${esc(snap.report.currency)} figures move a little with the exchange rate; its own page stays in ${esc(c)} to match the terminal.`).join('')}${snap.report.unconverted.length ? ` No exchange rate could be read for ${esc(snap.accounts.filter((a) => snap.report.unconverted.includes(a.id)).map((a) => a.title).join(', '))}: it is shown in its own currency and left out of the total.` : ''}${snap.accounts.some((a) => !a.error && bz(a).custom) ? ` On this device, ${esc(snap.accounts.filter((a) => !a.error && bz(a).custom).map((a) => `${a.title} is measured on ${money(bz(a).base, a.currency)}`).join(', '))} instead of the starting balance: profit and loss are as traded, and balances, equity and percentages are restated as if the account had started on that figure. The broker’s own balance is on each account’s ledger-check tile.` : ''}`);
   if ($('view').dataset.route !== r) { $('view').dataset.route = r; $('view').innerHTML = r === 'overview' ? overviewShell() : accountShell(); for (const k of [...last.keys()]) if (!['since', 'tabs', 'foot-a'].includes(k)) last.delete(k); charts.clear(); }
   if (r === 'overview') renderOverview(); else renderAccount(snap.accounts.find((a) => a.id === r), snap.accounts.findIndex((a) => a.id === r));
@@ -595,7 +595,7 @@ function renderOverview() {
       <div class="v ${tone(T.net)}">${money(T.net, R, true)}</div>
       <div class="s">${pct(tm.returnPct)} on ${money(tm.base, R)} ${tm.custom ? 'chosen as the base' : 'at the start'} · worth ${money(tm.equity, R)} now</div>
       <div class="base-line"><button class="set-btn" type="button" data-basis-open>Change balances</button><span>${tm.custom ? 'Measured on the balances you chose' : 'Measured on the starting balances'}</span></div>
-      <div class="split">${ok.map((a) => { const i = snap.accounts.indexOf(a); return `<a href="#${esc(a.id)}" style="--c:${SERIES[i % 3]}"><i></i>${esc(a.title)} <b class="${tone(a.stats.net)}">${a.rep ? money(a.rep.net, R, true) : money(a.stats.net, a.currency, true)}</b>${a.rep ? '' : '<small>not in the total</small>'}</a>`; }).join('')}</div></div>` +
+      <div class="split">${ok.map((a) => { const i = snap.accounts.indexOf(a); return `<a href="#${esc(a.id)}" style="--c:${SERIES[i % SERIES.length]}"><i></i>${esc(a.title)} <b class="${tone(a.stats.net)}">${a.rep ? money(a.rep.net, R, true) : money(a.stats.net, a.currency, true)}</b>${a.rep ? '' : '<small>not in the total</small>'}</a>`; }).join('')}</div></div>` +
     `<div class="cell"><div class="eyebrow">Win rate</div><div class="v">${trades ? pct(wins / trades * 100, false, 0) : '—'}</div><div class="s">${wins} won · ${losses} lost · ${trades} closed</div></div>
      <div class="cell"><div class="eyebrow">In the market now</div><div class="v">${open}</div><div class="s">open position${open === 1 ? '' : 's'} · ${pending} resting order${pending === 1 ? '' : 's'}</div></div>
      <div class="cell"><div class="eyebrow">Terminals</div><div class="v">${running}<span class="dim"> / ${snap.accounts.length}</span></div><div class="s">${running === snap.accounts.length ? 'all running and connected' : 'needs attention'}</div></div>`);
@@ -633,7 +633,7 @@ function renderOverview() {
     : wins === trades ? `${trades === 2 ? 'Both' : `All ${word(trades)}`} closed trades were profitable` : `${cap(word(wins))} of ${word(trades)} closed trades were profitable`);
 
   put('roster', snap.accounts.map((a, i) => {
-    const c = SERIES[i % 3];
+    const c = SERIES[i % SERIES.length];
     if (a.error) return `<a class="acct" href="#${esc(a.id)}" style="--c:${c}"><div><div class="acct-name"><b>${esc(a.title)}</b><span class="num">••${esc(a.login_tail)}</span></div><div class="acct-id">${esc(a.terminal)}</div></div><div class="loss">${esc(a.error)}</div><div></div></a>`;
     const s = a.stats, on = a.ea.engines.filter((e) => e.enabled);
     const b = bz(a), conv = a.rep && a.rep.converted, v0 = a.rep || { net: s.net, balance: a.balance, floating: a.floating }, vc = a.rep ? R : a.currency;
@@ -657,13 +657,13 @@ function renderOverview() {
     </a>`;
   }).join(''));
 
-  put('idx-legend', ok.map((a) => `<span style="--c:${SERIES[snap.accounts.indexOf(a) % 3]}"><i></i>${esc(a.title)} <b class="num ${tone(a.equity - a.start_balance)}">${pct(bz(a).equityPct(a.equity))}</b></span>`).join(''));
-  setChart('idx', { kind: 'line', unit: 'pct', zero: true, series: ok.map((a) => { const e = bz(a).equityPct; return { name: a.title, color: SERIES[snap.accounts.indexOf(a) % 3], pts: a.curve.map((p) => [p[0], e(p[1])]) }; }) });
+  put('idx-legend', ok.map((a) => `<span style="--c:${SERIES[snap.accounts.indexOf(a) % SERIES.length]}"><i></i>${esc(a.title)} <b class="num ${tone(a.equity - a.start_balance)}">${pct(bz(a).equityPct(a.equity))}</b></span>`).join(''));
+  setChart('idx', { kind: 'line', unit: 'pct', zero: true, series: ok.map((a) => { const e = bz(a).equityPct; return { name: a.title, color: SERIES[snap.accounts.indexOf(a) % SERIES.length], pts: a.curve.map((p) => [p[0], e(p[1])]) }; }) });
 
   const all = ok.flatMap((a) => a.trades.map((t) => ({ ...t, acct: a, i: snap.accounts.indexOf(a) }))).sort((x, y) => y.close - x.close);
   put('latest-n', all.length ? `Most recent ${Math.min(12, all.length)} of ${all.length}, newest first; net of costs, in ${esc(R)}` : `Closed trades will be listed here, in ${esc(R)}`);
   put('latest', all.length ? `<table><thead><tr><th>Closed</th><th>Account</th><th>Symbol</th><th>Side</th><th class="r">Lots</th><th>Engine</th><th>Exit</th><th class="r">Held</th><th class="r">Net</th></tr></thead><tbody>${all.slice(0, 12).map((t) =>
-    `<tr><td>${when(t.close)}</td><td><span class="who" style="--c:${SERIES[t.i % 3]}"><i></i>${esc(t.acct.title)}</span></td><td class="sym">${esc(t.symbol)}</td><td><span class="side ${t.side}">${t.side}</span></td><td class="r">${esc(t.lots)}</td><td>${esc(t.engine)}</td><td>${esc(EXIT[t.exit] || t.exit)}</td><td class="r">${dur(t.hold_s)}</td><td class="r ${tone(t.net)}"${t.net_rep != null && t.acct.currency !== R ? ` title="${esc(money(t.net, t.acct.currency, true))} in the account's own currency"` : ''}>${t.net_rep != null ? money(t.net_rep, R, true) : money(t.net, t.acct.currency, true)}</td></tr>`).join('')}</tbody></table>`
+    `<tr><td>${when(t.close)}</td><td><span class="who" style="--c:${SERIES[t.i % SERIES.length]}"><i></i>${esc(t.acct.title)}</span></td><td class="sym">${esc(t.symbol)}</td><td><span class="side ${t.side}">${t.side}</span></td><td class="r">${esc(t.lots)}</td><td>${esc(t.engine)}</td><td>${esc(EXIT[t.exit] || t.exit)}</td><td class="r">${dur(t.hold_s)}</td><td class="r ${tone(t.net)}"${t.net_rep != null && t.acct.currency !== R ? ` title="${esc(money(t.net, t.acct.currency, true))} in the account's own currency"` : ''}>${t.net_rep != null ? money(t.net_rep, R, true) : money(t.net, t.acct.currency, true)}</td></tr>`).join('')}</tbody></table>`
     : `<div class="empty">No trade has closed since ${esc(snap.cutoff_label)} yet.</div>`);
 }
 
@@ -685,7 +685,7 @@ function groupTable(rows, ccy, label) {
 }
 
 function renderAccount(a, i) {
-  const c = SERIES[i % 3];
+  const c = SERIES[i % SERIES.length];
   if (a.error) { put('hero', `<div><div class="eyebrow">${esc(a.terminal)} · ••${esc(a.login_tail)}</div><h1>${esc(a.title)}</h1><p class="loss">This account's files cannot be read: ${esc(a.error)}</p></div><div></div>`); return; }
   const s = a.stats, ccy = a.currency, m = (v, sg) => money(v, ccy, sg), base = bz(a);
   const brokerDay = new Date(serverNow() + a.status.offset_h * 3600e3).toISOString().slice(0, 10);
