@@ -27,6 +27,7 @@
   --text: "Public Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --mono: var(--text);
   --ease-out: cubic-bezier(.23,1,.32,1);
+  --ease-in-out: cubic-bezier(.77,0,.175,1);
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   color-scheme: dark;
@@ -210,6 +211,88 @@ td.r { font-variant-numeric: tabular-nums lining-nums; }
 .sym { font-weight: 600; }
 .who { display: inline-flex; align-items: center; gap: 7px; } .who i { width: 8px; height: 8px; background: var(--c); }
 
+/* the open book: one ruled row per open position, set like a private-bank statement. Who it is; its plan, drawn to
+   scale from stop to target with the entry marked and read left to right as risk to reward whatever the side; then
+   the floating result. The plan is drawn with CSS boxes rather than SVG so every hairline lands on a whole pixel. */
+#book-sec { scroll-margin-top: 112px; }
+a.cell { display: block; color: inherit; text-decoration: none; }
+.bk-grp + .bk-grp { margin-top: 26px; }
+.bk-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 0 16px; margin: 0; padding: 0 12px; font: 400 12.5px/1.3 var(--text); color: var(--fg-3); }
+.bk-name { display: flex; align-items: center; flex-wrap: wrap; gap: 0 14px; min-width: 0; }
+.bk-name a { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font: 600 15px/1.2 var(--text); color: var(--fg); text-decoration: none; }
+.bk-name a i { width: 8px; height: 8px; background: var(--c); }
+.bk-sub { font: 600 15px/1.2 var(--text); font-variant-numeric: tabular-nums lining-nums; color: var(--fg); white-space: nowrap; }
+.bk-sub small { font-size: 12px; font-weight: 400; color: var(--fg-3); }
+.bk-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+.pos { display: grid; grid-template-columns: minmax(128px, 1fr) minmax(0, 3fr) minmax(128px, 1fr); grid-template-areas: "id plan res"; gap: 0 36px; align-items: center; padding: 18px 12px 17px; border-top: 1px solid var(--line); transition: background-color 140ms ease; }
+.pos:first-child { border-top: 0; }
+.pos-id { grid-area: id; min-width: 0; }
+.pos-sym { font: 600 24px/1.1 var(--display); letter-spacing: .02em; }
+.pos-side { margin-top: 7px; font-size: 13px; color: var(--fg-2); font-variant-numeric: tabular-nums lining-nums; }
+.pos-side b { font-weight: 600; color: var(--fg); margin-right: 7px; }
+.pos-eng { margin-top: 2px; font-size: 12px; color: var(--fg-3); overflow-wrap: anywhere; }
+.pos-res { grid-area: res; min-width: 0; text-align: right; }
+.pos-fl { font: 600 26px/1.1 var(--display); font-variant-numeric: tabular-nums lining-nums; letter-spacing: -.01em; white-space: nowrap; }
+.pos-sh { margin-top: 7px; }
+.pos-sh, .pos-held { font-size: 12.5px; color: var(--fg-3); font-variant-numeric: tabular-nums lining-nums; white-space: nowrap; }
+.pos-sh b { font-weight: 500; color: var(--fg-2); }
+.pos-plan { grid-area: plan; min-width: 0; }
+.pl-top { position: relative; height: 21px; }
+.pl-entry { position: absolute; bottom: 4px; font-size: 12px; color: var(--fg-3); white-space: nowrap; }
+.pl-entry b, .pl-bot b { font: 500 13px/1.35 var(--text); color: var(--fg); font-variant-numeric: tabular-nums lining-nums; white-space: nowrap; }
+.pl-entry b { margin-left: 6px; }
+.trk { position: relative; height: 15px; container-type: inline-size; }   /* cqw: the track's width, for the live price */
+.trk-run, .trk-lines { position: absolute; inset: 0; }
+.trk i { position: absolute; display: block; }
+.seg { top: 7px; height: 1px; background: var(--fg); }
+.seg.risk { background: var(--loss); }
+.seg.open { height: 0; background: none; border-top: 1px dashed var(--fg-3); }
+.seg.open.risk { border-top-color: var(--loss); }
+.tk { top: 4px; width: 1px; height: 7px; background: var(--fg); }
+.tk.stop { background: var(--loss); }
+.tk.entry { top: 0; height: 15px; }
+.brk { top: 2px; width: 6px; height: 11px; margin-left: -3px; border-inline: 1px solid var(--fg); transform: skewX(-24deg); }
+.brk.risk { border-color: var(--loss); }
+.pl-bot { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 0 14px; margin-top: 8px; font-size: 12px; line-height: 1.35; color: var(--fg-3); }
+.pl-bot b { display: block; }
+.pl-bot > :nth-child(2) { text-align: center; } .pl-bot > :nth-child(2) b { font-weight: 600; }
+.pl-bot > :nth-child(3) { text-align: right; }
+.pl-none { font-size: 12.5px; color: var(--fg-3); }
+/* the live price: the one moving thing in a row, so the most exact mark on it. A small caret in the accent (the page's
+   colour for where you are now) points up at the price; entry to now is drawn heavier, loss-toned while against the
+   position and ink while for it. It glides to each new reading; muted once the quote is over five minutes old. */
+.now-bar { top: 6px; left: 0; width: 100%; height: 3px; background: var(--fg); transform-origin: 0 0; }
+.now-bar.risk { background: var(--loss); }
+.now-mk { position: absolute; top: 0; left: 0; width: 0; height: 15px; color: var(--accent); }
+.now-mk .cap { left: -3px; top: 9px; border-inline: 3.5px solid transparent; border-bottom: 5px solid currentColor; }
+.now-mk.over-l .cap, .now-mk.over-r .cap { top: 4px; border: 3.5px solid transparent; border-inline-width: 0; }
+.now-mk.over-l .cap { left: -6px; border-right: 5px solid currentColor; }   /* past an end: just outside it, pointing on out */
+.now-mk.over-r .cap { left: 2px; border-left: 5px solid currentColor; }
+.pl-now { overflow: clip; margin-top: 2px; }
+.now-l { display: inline-block; max-width: 100%; font-size: 12px; line-height: 1.35; color: var(--fg-3); }
+.now-l b, .now-l span { white-space: nowrap; }   /* too long for a narrow track: it wraps between its parts and sits at the left */
+.now-l b { margin-left: 6px; font: 500 13px/1.35 var(--text); color: var(--fg); font-variant-numeric: tabular-nums lining-nums; }
+.now-l span { margin-left: 5px; }
+.pl-now:not([hidden]) + .pl-bot { margin-top: 4px; }
+.now-mk, .now-bar, .now-at, .now-l { transition: transform 240ms var(--ease-in-out); }
+.snap :is(.now-mk, .now-bar, .now-at, .now-l) { transition: none; }
+.stale .now-mk { color: var(--fg-3); } .stale .now-bar { opacity: .4; } .stale .now-l b { color: var(--fg-2); }
+.bk-total { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-top: 22px; padding: 10px 12px 9px; border-top: 1px solid var(--rule); border-bottom: 3px double var(--rule); }
+.book.one .bk-total { margin-top: 0; }
+.bk-total .l { font-size: 13px; font-weight: 600; color: var(--fg-2); }
+.bk-total .v { font: 600 22px/1.15 var(--display); font-variant-numeric: tabular-nums lining-nums; white-space: nowrap; }
+.bk-rest { margin: 12px 0 0; padding: 0 12px; font-size: 13px; color: var(--fg-3); }
+/* once, when a row first appears: the plan unrolls from the entry out to its stop and target */
+@keyframes trk-grow { from { clip-path: inset(-6px calc(100% - var(--xe)) -6px var(--xe)); } to { clip-path: inset(-6px 0); } }
+.pos.enter :is(.trk-run, .pl-now) { animation: trk-grow 260ms var(--ease-out) var(--d, 0ms) both; }
+@media (hover: hover) and (pointer: fine) { .pos:hover { background: var(--raised); } .bk-name a:hover, a.cell:hover .s { text-decoration: underline; text-underline-offset: 3px; } }
+@media (max-width: 720px) {
+  .pos { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "id res" "plan plan"; gap: 14px 16px; align-items: start; padding: 18px 0 16px; }
+  .bk-head, .bk-total, .bk-rest { padding-inline: 0; }
+  .bk-head { padding-bottom: 6px; }
+  .pos-sym { font-size: 22px; } .pos-fl { font-size: 24px; }
+}
+
 footer { color: var(--fg-3); font-size: 12.5px; }
 footer .wrap > div { border-top: 2px solid var(--rule); padding: 16px 0 44px; }
 footer p { max-width: 86ch; margin: 0 0 8px; }
@@ -364,6 +447,95 @@ function measureTotal(accounts, chosen, report) {
 /* The same shift in the report's currency, for an account whose own currency differs. */
 function shiftInReport(a, m, report) { return m.shift / (a.rep && a.rep.converted ? report.rates[a.currency] : 1); }
 /* </basis-math> */
+/* <open-math> */
+/* An open position's plan, worked out only from the exact fields the terminal publishes. Nothing here estimates a
+   price: the live one is used only where the terminal publishes it. Distances are signed for the position (minus is
+   against it, plus in its favour), so a sell reads the same way as a buy. */
+const OPEN_GAP = 0.12;   // the narrowest gap drawn between two different levels, as a share of the track
+const OPEN_END = 0.28;   // the room a missing stop or target takes, drawn as an open end
+// The server normalises Decimals, so 4150.00 can arrive as "4.15E+3". Rewritten as a plain number, by string, exactly.
+function plainPrice(s) {
+  const m = /^\s*(-?)(\d*)(?:\.(\d*))?(?:[eE]([+-]?\d+))?\s*$/.exec(String(s ?? ''));
+  if (!m || !(m[2] || m[3])) return null;
+  const digits = m[2] + (m[3] || ''), point = m[2].length + Number(m[4] || 0);
+  let int = point <= 0 ? '0' : digits.slice(0, point).padEnd(point, '0'), frac = point <= 0 ? '0'.repeat(-point) + digits : digits.slice(point);
+  int = int.replace(/^0+(?=\d)/, '');
+  return m[1] + (frac ? `${int}.${frac}` : int);
+}
+// every price of one position printed to the most decimals any of them carries, so 4150 next to 4152.37 reads 4150.00
+const padPrice = (t, dp) => (dp ? `${t.split('.')[0]}.${(t.split('.')[1] || '').padEnd(dp, '0')}` : t);
+function planOf(p) {
+  const dir = p.side === 'sell' ? -1 : 1, txt = [p.open_price, p.sl, p.tp].map(plainPrice);
+  const [entry, stop, target] = txt.map((t, i) => (i ? Number(t) || null : Number(t)));   // a stop or target of 0 was never set
+  if (!(entry > 0)) return null;
+  const dp = Math.max(...txt.filter((t, i) => t && (!i || [stop, target][i - 1])).map((t) => (t.split('.')[1] || '').length));
+  const away = (v) => (v == null ? null : dir * (v - entry) / entry * 100);
+  const stopPct = away(stop), targetPct = away(target);
+  return { dir, dp, entry, stop, target, stopPct, targetPct,
+    text: { entry: padPrice(txt[0], dp), stop: stop && padPrice(txt[1], dp), target: target && padPrice(txt[2], dp) },
+    ratio: stopPct < 0 && targetPct > 0 ? dir * (target - entry) / (dir * (entry - stop)) : null,   // from the price distances
+    targetLosing: targetPct != null && targetPct <= 0,   // reaching the target closes this position at no gain
+    stopLocked: stopPct != null && stopPct >= 0 };       // the stop sits at entry or beyond it, in the position's favour
+}
+// Reward to risk with the smaller side as 1, reward always first: 3.0 : 1, or 1 : 105 when the reward is the smaller.
+function rrText(r) { const v = r >= 1 ? r : 1 / r, t = v < 9.95 ? v.toFixed(1) : v.toFixed(0); return r >= 1 ? `${t} : 1` : `1 : ${t}`; }
+/* Where each level sits on a track read left to right as risk to reward, whatever the side. Levels are drawn to
+   scale, except that a gap narrower than OPEN_GAP is widened to it and the other gap shortened; brk then marks the
+   middle of the shortened side, where the drawing shows a break. A missing stop or target becomes an open end.
+   now (the live price's distance, signed like the levels; null when there is none) sits on the same scale. With a
+   stop and a target it never moves them: past either end it is pinned there and flagged (over 'l' or 'r'). Out on
+   an open end it joins the scale instead, so entry and now both show. */
+function trackOf(pl, now = null) {
+  const rank = { stop: 0, entry: 1, now: 1, target: 2 };
+  const lv = [['entry', 0], ['stop', pl.stopPct], ['target', pl.targetPct]].filter((q) => q[1] != null), v = lv.map((q) => q[1]);
+  const joins = now != null && ((pl.stop == null && now < Math.min(...v)) || (pl.target == null && now > Math.max(...v)));
+  const pts = [...lv, ...(joins ? [['now', now]] : [])].sort((a, b) => a[1] - b[1] || rank[a[0]] - rank[b[0]]);
+  const lo = pts[0][1], hi = pts[pts.length - 1][1], L = pl.stop == null ? OPEN_END : 0, R = pl.target == null ? 1 - OPEN_END : 1;
+  const xs = pts.map((q) => (hi > lo ? (q[1] - lo) / (hi - lo) : 0.5));
+  let brk = null;
+  if (pts.length === 3) {
+    if (xs[1] > 0 && xs[1] < OPEN_GAP) { xs[1] = OPEN_GAP; brk = 1; }
+    else if (xs[1] < 1 && xs[1] > 1 - OPEN_GAP) { xs[1] = 1 - OPEN_GAP; brk = 0; }
+  }
+  const all = pts.map((q, i) => ({ k: q[0], v: q[1], x: L + xs[i] * (R - L) })), segs = [];
+  if (L) segs.push({ a: 0, b: all[0].x, risk: true, open: true });
+  for (let i = 1; i < all.length; i++) if (all[i].x > all[i - 1].x) segs.push({ a: all[i - 1].x, b: all[i].x, risk: all[i - 1].v + all[i].v < 0, open: false });
+  if (R < 1) segs.push({ a: all[all.length - 1].x, b: 1, risk: false, open: true });
+  let at = null;
+  if (joins) at = { x: all.find((m) => m.k === 'now').x, over: null };
+  else if (now != null) {
+    const first = all[0], last = all[all.length - 1], i = all.findIndex((m, j) => j && m.v >= now && m.v > all[j - 1].v);
+    at = now < first.v ? { x: first.x, over: 'l' } : now > last.v ? { x: last.x, over: 'r' } : now === first.v ? { x: first.x, over: null }
+      : { x: all[i - 1].x + (now - all[i - 1].v) / (all[i].v - all[i - 1].v) * (all[i].x - all[i - 1].x), over: null };   // to scale between the two levels either side
+  }
+  return { marks: all.filter((m) => m.k !== 'now').map((m) => ({ k: m.k, x: m.x })), segs, brk: brk == null ? null : (all[brk].x + all[brk + 1].x) / 2, now: at };
+}
+/* The live price, when the terminal supplies one (the price the position would close at now). Never estimated: no
+   price, no marker. to/of: how far along it is toward the stop or the target, from price distances. */
+const NOW_STALE_MS = 5 * 60e3;
+const isStale = (ms, nowMs) => !(ms > 0) || nowMs - ms > NOW_STALE_MS;   // a quote with no time counts as old
+function nowOf(p, pl, nowMs) {
+  const t = plainPrice(p.price), price = Number(t);
+  if (!pl || t == null || !(price > 0)) return null;
+  const pct = pl.dir * (price - pl.entry) / pl.entry * 100, dp = Math.max(pl.dp, (t.split('.')[1] || '').length);
+  const to = pct > 0 && pl.targetPct > 0 ? 'target' : pct < 0 && pl.stopPct < 0 ? 'stop' : null;
+  return { price, pct, text: padPrice(t, dp), to, of: to ? (price - pl.entry) / ((to === 'target' ? pl.target : pl.stop) - pl.entry) * 100 : null,
+    stale: isStale(p.price_ms, nowMs), ms: p.price_ms > 0 ? p.price_ms : null };
+}
+/* Money. A position's floating result in the report's currency, at the broker's rate the server uses for the account;
+   null when there is no rate. A subtotal or total is never a sum of these rounded rows: it is the server's own figure. */
+function inReport(v, a, report) { if (!a.rep) return null; if (!a.rep.converted) return v; const r = report.rates[a.currency]; return r > 0 ? v / r : null; }
+function bookTotal(accounts, report) {
+  if (typeof report.totals.floating === 'number') return report.totals.floating;
+  return Math.round(accounts.reduce((s, a) => s + (a.rep ? a.rep.floating : 0), 0) * 100) / 100;
+}
+const shareOf = (v, equity) => (equity > 0 ? v / equity * 100 : null);   // floating as a share of the account's equity
+/* The order of the rows, decided here and nowhere else: largest loss first, ties oldest first, then by ticket so the
+   order never flickers. Alternatives: newest first (b.open - a.open), by symbol (a.symbol.localeCompare(b.symbol)).
+   ORDER_WORDS is what the page says about it: change the two together. */
+const ORDER_WORDS = 'largest loss first';
+function openOrder(a, b) { return a.floating - b.floating || a.open - b.open || a.id - b.id; }
+/* </open-math> */
 const pl = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const word = (n) => ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'][n] || String(n);
 const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
@@ -454,7 +626,7 @@ async function poll() {
 }
 function stopPoll() { running = false; if (ctrl) ctrl.abort(); }
 document.addEventListener('visibilitychange', () => { if (document.hidden) stopPoll(); else if (token || open) setTimeout(poll, 50); });
-setInterval(() => { if (token || open) tickConn(); if (snap) tickStates(); }, 1000);
+setInterval(() => { if (token || open) tickConn(); if (snap) { tickStates(); tickBook(); } }, 1000);
 
 /* ------------------------------------------------------------------ sign in / out */
 function setOpen(v) { open = v; store.set('eadesk.open', v ? '1' : null); $('out').hidden = v; }
@@ -576,11 +748,148 @@ function render() {
   renderBanner(); tickStates(); drawCharts(false);
 }
 
+/* ---- the open book: open positions with their plans. The overview shows every account's, grouped, in the report's
+   currency; an account page shows its own, in the account's currency. One renderer for both. */
+const SIDE = { buy: 'Long', sell: 'Short' };   // an open position is a holding, as in the long/short split on each account page
+const patched = new WeakMap();
+function patch(el, html) { if (patched.get(el) === html) return false; el.innerHTML = html; patched.set(el, html); return true; }
+function mk(tag, cls, html = '') { const el = document.createElement(tag); el.className = cls; el.innerHTML = html; return el; }
+/* Children keyed by data-k: each is made once, moved only when the order changes and removed when its key is gone.
+   A new reading every 10 seconds then touches only the figures that moved: no entrance replays, and hover and text
+   selection survive. */
+function keyed(parent, keys, make) {
+  const have = new Map([...parent.children].map((el) => [el.dataset.k, el])), out = new Map();
+  let prev = null;
+  for (const k of keys) {
+    const el = have.get(k) || make(k); el.dataset.k = k; have.delete(k); out.set(k, el);
+    const want = prev ? prev.nextElementSibling : parent.firstElementChild;
+    if (el !== want) parent.insertBefore(el, want);
+    prev = el;
+  }
+  for (const el of have.values()) el.remove();
+  return out;
+}
+const at = (x) => `calc(${(x * 100).toFixed(3)}% - ${x.toFixed(3)}px)`;   // a 1px mark at x, kept inside the track at both ends
+const pc = (x) => `${(x * 100).toFixed(3)}%`;
+const atw = (x) => `calc(${(x * 100).toFixed(3)}cqw - ${x.toFixed(3)}px)`;   // at(), for a zero-width mark moved by transform
+/* A plan is built once per row and then patched: its levels and labels by string, the live price by transform. */
+const PLAN = '<div class="pl-top"></div><div class="trk"><div class="trk-run"><div class="trk-lines"></div><i class="now-bar" hidden></i><div class="now-mk" hidden><i class="cap"></i></div></div><i class="tk entry"></i></div><div class="pl-now" hidden><div class="now-at"><span class="now-l"></span></div></div><div class="pl-bot"></div>';
+function planStatic(pl, tr) {
+  const xe = tr.marks.find((m) => m.k === 'entry').x;
+  const seg =(s, l = pc(s.a), r = pc(1 - s.b)) => `<i class="seg${s.risk ? ' risk' : ''}${s.open ? ' open' : ''}" style="left:${l};right:${r}"></i>`;
+  const line = tr.segs.map((s) => (tr.brk != null && s.a < tr.brk && tr.brk < s.b   // the shortened side: a gap with a break mark in it
+    ? seg(s, undefined, `calc(${pc(1 - tr.brk)} + 4px)`) + seg(s, `calc(${pc(tr.brk)} + 4px)`) + `<i class="brk${s.risk ? ' risk' : ''}" style="left:${pc(tr.brk)}"></i>`
+    : seg(s))).join('');
+  const ticks = tr.marks.filter((m) => m.k !== 'entry').map((m) => `<i class="tk ${m.k}" style="left:${at(m.x)}"></i>`).join('');
+  const where = (v) => (v === 0 ? 'at' : (v > 0) === (pl.dir > 0) ? 'above' : 'below');   // a distance for the position, as a price direction
+  const mid = pl.ratio != null ? `<b>${rrText(pl.ratio)}</b>reward to risk`
+    : pl.targetLosing ? `<b>Target ${where(pl.targetPct)} entry</b>${pl.targetPct ? 'a loss if reached' : 'no gain if reached'}`
+    : pl.stopLocked ? `<b>Stop ${where(pl.stopPct)} entry</b>` : '';
+  return { xe, lines: line + ticks, top: `<span class="pl-entry" style="left:${pc(xe)};transform:translateX(-${pc(xe)})">Entry<b>${esc(pl.text.entry)}</b></span>`,
+    bot: `<div>${pl.stop ? `<b>${esc(pl.text.stop)}</b>Stop <span class="nw">${pct(pl.stopPct)}</span>` : '<b>No stop</b>'}</div><div>${mid}</div><div>${pl.target ? `<b>${esc(pl.text.target)}</b>Target <span class="nw">${pct(pl.targetPct)}</span>` : '<b>No target</b>'}</div>` };
+}
+// how far along the live price is, in words, only where it is exact
+const nowWords = (nw) => (!nw.to ? (nw.pct === 0 ? 'at entry' : '') : nw.of >= 100 ? `${nw.of === 100 ? 'at' : 'past'} the ${nw.to}` : `${Math.floor(nw.of)}% of the way to ${nw.to}`);
+const asOf = (ms) => (new Date(ms).toDateString() === new Date(serverNow()).toDateString() ? hmf : dtf).format(ms);   // the day too, once it is not today
+const nowAge = (nw) => (nw.stale ? (nw.ms ? `as of ${asOf(nw.ms)}` : 'time not published') : '');
+/* Patches one plan in place. The live price glides to each new reading with a transform; when the scale itself has
+   to change (a price out past a missing stop or target), everything snaps there together instead. */
+function patchPlan(el, pl, nw, tr, words) {
+  if (el.getAttribute('aria-label') !== words) el.setAttribute('aria-label', words);
+  if (!pl) { if (el.dataset.mode !== 'none') { el.dataset.mode = 'none'; el.innerHTML = '<div class="pl-none">No entry price was published for this position.</div>'; } return; }
+  if (el.dataset.mode !== 'plan') { el.dataset.mode = 'plan'; el.innerHTML = PLAN; }
+  const s = planStatic(pl, tr), q = (c) => el.querySelector(c);
+  let moved = el.style.getPropertyValue('--xe') !== pc(s.xe);
+  if (moved) { el.style.setProperty('--xe', pc(s.xe)); q('.tk.entry').style.left = at(s.xe); }
+  moved = patch(q('.trk-lines'), s.lines) || moved;
+  patch(q('.pl-top'), s.top); patch(q('.pl-bot'), s.bot);
+  const bar = q('.now-bar'), mark = q('.now-mk'), tier = q('.pl-now');
+  bar.hidden = mark.hidden = tier.hidden = !nw;
+  el.classList.toggle('stale', !!nw && nw.stale);
+  if (nw && nw.ms) el.dataset.pms = nw.ms; else delete el.dataset.pms;
+  if (!nw) return;
+  const x = tr.now.x, lo = Math.min(x, s.xe), w = nowWords(nw);
+  if (moved) el.classList.add('snap');
+  mark.className = `now-mk${tr.now.over ? ` over-${tr.now.over}` : ''}`;   // past an end: pinned there, pointing on out
+  mark.style.transform = `translateX(${atw(x)})`;
+  bar.className = `now-bar${nw.pct < 0 ? ' risk' : ''}`;
+  bar.style.transform = `translateX(${pc(lo)}) scaleX(${(Math.max(x, s.xe) - lo).toFixed(5)})`;
+  q('.now-at').style.transform = `translateX(${pc(x)})`; q('.now-l').style.transform = `translateX(-${pc(x)})`;
+  patch(q('.now-l'), `Now<b>${esc(nw.text)}</b>${nw.stale ? ` <span>${esc(nowAge(nw))}</span>` : ''}${w ? ` <span>${w}</span>` : ''}`);
+  if (moved) { void el.offsetWidth; el.classList.remove('snap'); }
+}
+/* The text alternative for the drawing: every level in words, with the price direction spelled out for sells. */
+function planWords(pl, side, nw, tr) {
+  if (!pl) return 'No entry price was published for this position';
+  const lvl = (name, v, t) => `${name} ${t}, ${v === pl.entry ? 'at entry' : `${pct(Math.abs(v - pl.entry) / pl.entry * 100, false)} ${v > pl.entry ? 'above' : 'below'} entry`}`;
+  return [`${SIDE[side] || side} position`, pl.stop ? lvl('stop', pl.stop, pl.text.stop) : 'no stop', `entry ${pl.text.entry}`, pl.target ? lvl('target', pl.target, pl.text.target) : 'no target',
+    pl.ratio != null ? `reward to risk ${rrText(pl.ratio).replace(' : ', ' to ')}` : pl.targetLosing ? (pl.targetPct ? 'reaching the target is a loss' : 'reaching the target gains nothing') : '',
+    nw ? [`now ${nw.text}`, nowAge(nw), nowWords(nw)].filter(Boolean).join(', ') : '',
+    tr.brk != null ? 'drawn shortened, not to scale' : ''].filter(Boolean).join('; ');
+}
+function bookRow(li, p, a, o) {
+  const pl = planOf(p), nw = nowOf(p, pl, serverNow()), tr = pl && trackOf(pl, nw && nw.pct);
+  patch(li.children[0], `<div class="pos-sym">${esc(p.symbol)}</div><div class="pos-side"><b>${esc(SIDE[p.side] || p.side)}</b>${esc(p.lots)} ${Number(p.lots) === 1 ? 'lot' : 'lots'}</div><div class="pos-eng">${esc(p.engine)} <span class="tag">${esc(p.tag)}</span></div>`);
+  patchPlan(li.children[1], pl, nw, tr, planWords(pl, p.side, nw, tr));
+  const v = o.convert ? inReport(p.floating, a, o.report) : p.floating, own = o.convert && v != null && a.rep.converted;
+  patch(li.querySelector('.pos-fl'), `<span class="${tone(p.floating)}"${own ? ` title="${esc(money(p.floating, a.currency, true))} in the account’s own currency"` : ''}>${v == null ? money(p.floating, a.currency, true) : money(v, o.ccy, true)}</span>`);
+  const sh = shareOf(p.floating, o.equity);
+  patch(li.querySelector('.pos-sh'), sh == null ? '' : `<b>${pct(sh)}</b> of equity`);
+  const held = li.querySelector('.pos-held');
+  if (held.dataset.held !== String(p.open)) { held.dataset.held = p.open; held.title = `opened ${dtfFull.format(p.open)}`; }
+  return { broken: !!tr && tr.brk != null, priced: !!nw };
+}
+/* groups: [{ a, rows (already in openOrder), equity (as measured on the chosen base), name, sub }]. Returns what the
+   source note needs to know: whether any plan was drawn shortened, and how many rows carry a live price. */
+function renderBook(groups, o) {
+  const host = $('book'), drawn = { broken: false, priced: 0 }; let fresh = 0;
+  host.classList.toggle('one', !o.multi);
+  const els = keyed(host, [...groups.map((g) => `a:${g.a.id}`), ...(o.empty ? ['empty'] : []), ...(groups.length ? ['total'] : []), ...(o.rest ? ['rest'] : [])], (k) =>
+    k === 'empty' ? mk('div', 'empty') : k === 'total' ? mk('div', 'bk-total', '<span class="l"></span><span class="v"></span>') : k === 'rest' ? mk('p', 'bk-rest')
+    : mk('div', 'bk-grp', `${o.multi ? '<h3 class="bk-head"><span class="bk-name"></span><span class="bk-sub"></span></h3>' : ''}<ul class="bk-list" role="list"></ul>`));
+  for (const g of groups) {
+    const box = els.get(`a:${g.a.id}`);
+    if (o.multi) { patch(box.querySelector('.bk-name'), g.name); patch(box.querySelector('.bk-sub'), g.sub); }
+    const rows = keyed(box.querySelector('.bk-list'), g.rows.map((p) => String(p.id)), () => {
+      const li = mk('li', 'pos enter', '<div class="pos-id"></div><div class="pos-plan" role="img"></div><div class="pos-res"><div class="pos-fl"></div><div class="pos-sh"></div><div class="pos-held"></div></div>');
+      li.style.setProperty('--d', `${Math.min(fresh++, 5) * 28}ms`);   // rows that arrive together unroll a beat apart
+      setTimeout(() => li.classList.remove('enter'), 900);                // a stop or target moved later redraws without replaying
+      return li;
+    });
+    for (const p of g.rows) { const r = bookRow(rows.get(String(p.id)), p, g.a, { ...o, equity: g.equity }); drawn.broken ||= r.broken; drawn.priced += r.priced; }
+  }
+  if (o.empty) patch(els.get('empty'), o.empty);
+  if (groups.length) { const t = els.get('total'); patch(t.querySelector('.l'), o.totalLabel); patch(t.querySelector('.v'), o.totalValue); }
+  if (o.rest) patch(els.get('rest'), o.rest);
+  tickBook();
+  return drawn;
+}
+function tickBook() {   // every second: time held, and a quote that has just turned five minutes old redraws muted with its time
+  document.querySelectorAll('.pos-held[data-held]').forEach((el) => {
+    const t = `held ${dur(Math.max(0, Math.floor((serverNow() - Number(el.dataset.held)) / 1000)))}`;
+    if (el.textContent !== t) el.textContent = t;
+  });
+  if ([...document.querySelectorAll('.pos-plan[data-pms]')].some((el) => isStale(Number(el.dataset.pms), serverNow()) !== el.classList.contains('stale'))) render();
+}
+const BOOK_HOW = 'Each line runs from stop to target with the entry marked; percentages are distances from entry, minus against the position';
+const bookSrc = (lines, drawn, conv) => (lines ? `Source: each terminal’s open positions, refreshed every 10 seconds. ${!drawn.priced ? 'The terminals publish no live price, so each line shows the plan, not where price is now.'
+    : `The caret marks the price ${drawn.priced < lines ? 'each position with a published quote' : 'each position'} would close at now (the bid for a long, the ask for a short), drawn to the same scale; a muted caret is a quote over five minutes old, shown with its time.${drawn.priced < lines ? ' A line without one shows the plan only.' : ''}`}${drawn.broken ? ' A break in a line marks a side shortened to fit; its percentage is exact.' : ''}${conv}`
+  : 'Source: each terminal’s open positions and its count of resting orders, refreshed every 10 seconds.');
+document.addEventListener('click', (ev) => {   // a jump to an exhibit on this page; the address keeps naming the page, as routes do
+  const j = ev.target.closest('[data-jump]');
+  if (!j || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey || ev.button) return;
+  ev.preventDefault();
+  const to = $(j.dataset.jump); if (!to || to.hidden) return;
+  to.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+  const h = to.querySelector('h2'); h.tabIndex = -1; h.focus({ preventScroll: true });
+});
+
 /* ---- overview */
 const overviewShell = () => `
   <div id="banner" hidden style="display:grid;gap:8px"></div>
   <section class="lede"><div class="kicker" id="kicker"></div><h1 id="headline"></h1><ol class="takeaways" id="takeaways"></ol></section>
   <section><div class="strip" id="strip"></div></section>
+  ${ex('book', '<span id="book-sub"></span>', '<div class="book" id="book"></div>', '<span id="book-src"></span>', 'id="book-sec"')}
   ${ex('roster', '<span id="roster-sub"></span>', '<div class="roster" id="roster"></div>', 'Source: each terminal’s run record and the broker’s deal history. Select an account for its full report.')}
   ${ex('idx', '<span id="idx-sub"></span>', '<div class="legend" id="idx-legend"></div><div class="chart" id="idx"></div>', 'Source: account equity as reported by each terminal, sampled every minute.')}
   ${ex('latest', '<span id="latest-n"></span>', '<div class="tbl" id="latest"></div>', 'Source: the broker’s deal history. Net is after commission, swap and fees.')}`;
@@ -597,8 +906,30 @@ function renderOverview() {
       <div class="base-line"><button class="set-btn" type="button" data-basis-open>Change balances</button><span>${tm.custom ? 'Measured on the balances you chose' : 'Measured on the starting balances'}</span></div>
       <div class="split">${ok.map((a) => { const i = snap.accounts.indexOf(a); return `<a href="#${esc(a.id)}" style="--c:${SERIES[i % SERIES.length]}"><i></i>${esc(a.title)} <b class="${tone(a.stats.net)}">${a.rep ? money(a.rep.net, R, true) : money(a.stats.net, a.currency, true)}</b>${a.rep ? '' : '<small>not in the total</small>'}</a>`; }).join('')}</div></div>` +
     `<div class="cell"><div class="eyebrow">Win rate</div><div class="v">${trades ? pct(wins / trades * 100, false, 0) : '—'}</div><div class="s">${wins} won · ${losses} lost · ${trades} closed</div></div>
-     <div class="cell"><div class="eyebrow">In the market now</div><div class="v">${open}</div><div class="s">open position${open === 1 ? '' : 's'} · ${pending} resting order${pending === 1 ? '' : 's'}</div></div>
+     ${open || pending ? '<a class="cell" href="#book-sec" data-jump="book-sec">' : '<div class="cell">'}<div class="eyebrow">In the market now</div><div class="v">${open}</div><div class="s">open position${open === 1 ? '' : 's'} · ${pending} resting order${pending === 1 ? '' : 's'}</div>${open || pending ? '</a>' : '</div>'}
      <div class="cell"><div class="eyebrow">Terminals</div><div class="v">${running}<span class="dim"> / ${snap.accounts.length}</span></div><div class="s">${running === snap.accounts.length ? 'all running and connected' : 'needs attention'}</div></div>`);
+
+  /* The open book. Each account's subtotal and the total are the server's own pound figures, never a sum of rows. */
+  const holding = ok.filter((a) => a.open.length), allIn = holding.every((a) => a.rep), F = bookTotal(ok, rep);
+  const lead = holding.length > 1 && allIn && F ? holding.filter((a) => a.rep.floating * F > 0).sort((x, y) => Math.abs(y.rep.floating) - Math.abs(x.rep.floating))[0] : null;
+  const resting = ok.filter((a) => a.status.pending).map((a) => `${esc(a.title)} ${word(a.status.pending)}`).join(', ');
+  const conv = holding.filter((a) => a.rep && a.rep.converted);
+  $('book-sec').hidden = !open && !pending;
+  put('book-t', open ? `${cap(word(open))} ${open === 1 ? 'position is' : 'positions are'} open${holding.length === 1 ? ` on ${esc(holding[0].title)}` : ''}${allIn ? `, floating ${M(F, R, true)}` : ''}${lead ? `; ${esc(lead.title)} carries the most` : ''}`
+    : `No position is open; ${word(pending)} resting order${pending === 1 ? ' is' : 's are'} waiting for price`);
+  put('book-sub', open ? `Open positions by account, ${ORDER_WORDS}; floating result in ${esc(R)}. ${BOOK_HOW}` : `Open positions appear here with their stops, targets and floating result in ${esc(R)}`);
+  const drawn = renderBook(holding.map((a) => {
+    const i = snap.accounts.indexOf(a), cv = a.rep && a.rep.converted;
+    return { a, rows: [...a.open].sort(openOrder), equity: bz(a).bal(a.equity),
+      name: `<a href="#${esc(a.id)}" style="--c:${SERIES[i % SERIES.length]}"><i></i>${esc(a.title)}</a><span>${word(a.open.length)} open</span>${cv ? `<span>${esc(a.currency)} account, shown in ${esc(R)}</span>` : ''}`,
+      sub: a.rep ? `<span class="${tone(a.rep.floating)}"${cv ? ` title="${esc(money(a.floating, a.currency, true))} in the account’s own currency"` : ''}>${money(a.rep.floating, R, true)}</span>`
+        : `<span class="${tone(a.floating)}">${money(a.floating, a.currency, true)}</span> <small>not in the total</small>` };
+  }), { multi: true, convert: true, ccy: R, report: rep,
+    empty: open ? '' : `Resting, not yet filled: ${resting}. Each order becomes a line here once it fills; the terminals publish how many orders rest, not their prices.`,
+    rest: open && pending ? `Also resting, not yet filled: ${word(pending)} order${pending === 1 ? '' : 's'} (${resting}). The terminals publish how many orders rest, not their prices.` : '',
+    totalLabel: `Total floating, ${word(open)} position${open === 1 ? '' : 's'}${allIn ? '' : `, without ${esc(holding.filter((a) => !a.rep).map((a) => a.title).join(', '))} (no exchange rate)`}`,
+    totalValue: `<span class="${tone(F)}">${money(F, R, true)}</span>` });
+  put('book-src', bookSrc(open, drawn, conv.length ? ` ${esc(conv.map((a) => a.title).join(', '))} ${conv.length === 1 ? 'is' : 'are'} converted to ${esc(R)} one position at a time, so ${conv.length === 1 ? 'its rows' : 'their rows'} can differ from ${conv.length === 1 ? 'its subtotal' : 'the subtotals'} by a penny.` : ''));
 
   /* The headline and takeaways are worked out from the figures, so they stay true as trades close. */
   const n = inTotal.length, cutoff = esc(snap.cutoff_label), subj = n === 1 ? 'The account is' : `The ${word(n)} accounts are`;
@@ -675,7 +1006,7 @@ const accountShell = () => `
   ${ex('eq', '<span id="eq-sub"></span>', '<div class="legend" id="eq-legend"></div><div class="chart" id="eq"></div>', 'Source: account equity and balance as reported by the terminal.')}
   ${ex('by', 'Net result by engine and by symbol, in the account’s currency', '<div class="two"><div class="tbl" id="by-engine"></div><div class="tbl" id="by-symbol"></div></div>', 'Source: the broker’s deal history. An engine is identified by its magic number.')}
   ${ex('days', 'Net result of the trades closed on each broker day', '<div class="chart" id="days"></div>', 'Source: the broker’s deal history, grouped by the broker’s calendar day.')}
-  ${ex('open', '<span id="open-n"></span>', '<div class="tbl" id="open"></div>', 'Source: the terminal’s open positions, refreshed every 10 seconds.', 'id="open-sec"')}
+  ${ex('book', '<span id="book-sub"></span>', '<div class="book" id="book"></div>', '<span id="book-src"></span>', 'id="book-sec"')}
   ${ex('ledger', '<span id="ledger-n"></span>', '<div class="tbl" id="ledger"></div>', 'Source: the broker’s deal history. Costs are commission, swap and fees.')}`;
 
 function groupTable(rows, ccy, label) {
@@ -753,12 +1084,14 @@ function renderAccount(a, i) {
   put('by-symbol', groupTable(a.by_symbol, ccy, 'Symbol'));
   setChart('days', { kind: 'bars', unit: ccy, bars: a.daily.map((d) => ({ label: dayf.format(new Date(`${d.day}T12:00:00Z`)), v: d.net, n: d.trades })) });
 
-  $('open-sec').hidden = !a.open.length && !a.status.pending;
-  put('open-t', a.open.length ? `${cap(pl(a.open.length, 'position is', 'positions are'))} open, floating ${m(a.floating, true)}` : `No position is open; ${pl(a.status.pending, 'resting order is', 'resting orders are')} waiting for price`);
-  put('open-n', `Open positions with their stops and targets; floating result in ${esc(ccy)}`);
-  put('open', a.open.length ? `<table><thead><tr><th>Opened</th><th>Symbol</th><th>Side</th><th class="r">Lots</th><th class="r">Entry</th><th class="r">Stop</th><th class="r">Target</th><th>Engine</th><th class="r">Floating</th></tr></thead><tbody>${a.open.map((p) =>
-    `<tr><td>${when(p.open)}</td><td class="sym">${esc(p.symbol)}</td><td><span class="side ${p.side}">${p.side}</span></td><td class="r">${esc(p.lots)}</td><td class="r">${esc(p.open_price)}</td><td class="r">${p.sl === '0' ? '—' : esc(p.sl)}</td><td class="r">${p.tp === '0' ? '—' : esc(p.tp)}</td><td>${esc(p.engine)}</td><td class="r ${tone(p.floating)}">${m(p.floating, true)}</td></tr>`).join('')}</tbody></table>`
-    : '<div class="empty">No open position.</div>');
+  const nOpen = a.open.length, rest = a.status.pending;
+  $('book-sec').hidden = !nOpen && !rest;
+  put('book-t', nOpen ? `${cap(word(nOpen))} ${nOpen === 1 ? 'position is' : 'positions are'} open, floating ${m(a.floating, true)}` : `No position is open; ${word(rest)} resting order${rest === 1 ? ' is' : 's are'} waiting for price`);
+  put('book-sub', nOpen ? `Open positions, ${ORDER_WORDS}; floating result in ${esc(ccy)}. ${BOOK_HOW}` : `Open positions appear here with their stops, targets and floating result in ${esc(ccy)}`);
+  put('book-src', bookSrc(nOpen, renderBook(nOpen ? [{ a, rows: [...a.open].sort(openOrder), equity: base.bal(a.equity) }] : [], { multi: false, convert: false, ccy,
+    empty: nOpen ? '' : `${rest === 1 ? 'The resting order becomes a line' : 'Each resting order becomes a line'} here once it fills; the terminal publishes how many orders rest, not their prices.`,
+    rest: nOpen && rest ? `Also resting, not yet filled: ${word(rest)} order${rest === 1 ? '' : 's'}. The terminal publishes how many orders rest, not their prices.` : '',
+    totalLabel: `Total floating, ${word(nOpen)} position${nOpen === 1 ? '' : 's'}`, totalValue: `<span class="${tone(a.floating)}">${m(a.floating, true)}</span>` }), ''));
 
   const rows = [...a.trades].reverse();
   put('ledger-t', rows.length ? `Trade ledger: ${pl(rows.length, 'closed trade', 'closed trades')}, newest first` : 'Trade ledger: nothing has closed yet');
