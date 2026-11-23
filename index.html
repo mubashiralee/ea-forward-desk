@@ -481,6 +481,17 @@ a.cell:hover { border-color: var(--accent-border); background: var(--raised-2); 
 .mini-bar { height: 4px; border-radius: 999px; background: var(--line); overflow: hidden; margin-top: 10px; display: flex; }
 .mini-bar .ok { background: var(--gain); height: 100%; }
 .mini-bar .bad { background: var(--loss); height: 100%; }
+/* per-account win rates, one compact line each, under the pooled figure */
+.wr-break { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); display: grid; gap: 8px; }
+.wr-row { display: block; font-size: 11.5px; color: inherit; text-decoration: none; border-radius: var(--r-xs); }
+.wr-row:hover .n span { color: var(--accent); }
+.wr-row:hover .bar { background: var(--accent-border); }
+.wr-row .n { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--fg-2); }
+.wr-row .n i { width: 6px; height: 6px; border-radius: 2px; background: var(--c); flex: none; }
+.wr-row .n span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wr-row .n b { margin-left: auto; padding-left: 8px; font-weight: 600; font-size: 11.5px; color: var(--fg); font-variant-numeric: tabular-nums lining-nums; }
+.wr-row .bar { display: block; height: 3px; border-radius: 999px; background: var(--line); overflow: hidden; margin-top: 4px; }
+.wr-row .bar i { display: block; height: 100%; background: var(--gain); transition: width 260ms var(--ease-out); }
 .term-dots { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
 .term-dot {
   display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 999px;
@@ -2324,6 +2335,10 @@ function renderOverview() {
       <div class="v">${trades ? pct(winRatio, false, 0) : '—'}</div>
       ${trades ? `<div class="mini-bar" aria-hidden="true"><div class="ok" style="width:${winRatio.toFixed(1)}%"></div><div class="bad" style="width:${(100 - winRatio).toFixed(1)}%"></div></div>` : ''}
       <div class="s"><b>${wins}</b> won · <b>${losses}</b> lost · ${trades} closed</div>
+      ${trades ? `<div class="wr-break" aria-label="Win rate by account">${ok.map((a) => {
+        const i = snap.accounts.indexOf(a), st = a.stats, r = st.win_rate == null ? null : Math.max(0, Math.min(100, Number(st.win_rate)));
+        return `<a class="wr-row" href="#${esc(a.id)}" style="--c:${SERIES[i % SERIES.length]}" title="${esc(a.title)}: ${st.wins} won, ${st.losses} lost of ${st.trades} closed"><span class="n"><i></i><span>${esc(a.title)}</span><b>${r == null ? '—' : pct(r, false, 0)}</b></span><span class="bar"><i style="width:${r == null ? 0 : r}%"></i></span></a>`;
+      }).join('')}</div>` : ''}
     </div>` +
     `${openCnt || pending ? '<a class="cell" href="#book-sec" data-jump="book-sec">' : '<div class="cell">'}
       <div class="eyebrow">In the market now</div>
