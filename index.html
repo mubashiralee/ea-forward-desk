@@ -887,6 +887,31 @@ a.now-item:hover .v { color: var(--accent); }
 
 .two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 36px; }
 
+/* ---- change log: program changes from the run record, and the operator's notes */
+.log { display: grid; border-top: 1px solid var(--line); }
+.log-row {
+  display: grid; grid-template-columns: 176px minmax(0, 1fr); gap: 4px 24px;
+  padding: 14px 0; border-bottom: 1px solid var(--line); font-size: 13.5px;
+}
+.log-when { color: var(--fg-3); font-size: 12.5px; line-height: 1.6; font-variant-numeric: tabular-nums lining-nums; }
+.log-what b { font-weight: 600; color: var(--fg); }
+.log-what .tag, .log-who { margin-left: 8px; }
+.log-who { font-size: 11.5px; color: var(--fg-3); white-space: nowrap; }
+.log-what p { margin: 4px 0 0; color: var(--fg-2); line-height: 1.55; max-width: 92ch; }
+.tbl:not([hidden]) + .log { margin-top: 22px; }
+.kv a { color: var(--fg-2); text-decoration-color: var(--line); text-underline-offset: 3px; }
+@media (hover: hover) and (pointer: fine) {
+  .kv a:hover { color: var(--accent); text-decoration-color: currentColor; }
+}
+.ver-pre { display: none; }
+@media (max-width: 680px) {
+  .log-row { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  /* the version table on a phone: trades and net stay in view; the preset moves under the name */
+  .ver-wide { display: none; }
+  .ver-pre { display: block; margin-top: 2px; font-size: 12px; font-weight: 400; color: var(--fg-3); white-space: normal; }
+  .ver-ran { white-space: normal; }
+}
+
 /* ---- tables + interactive sorting + mobile cards */
 .tbl-wrap { position: relative; }
 .tbl { overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -1498,6 +1523,62 @@ const dtfFull = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numer
 const dayf = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' });
 const hmf = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit' });
 const when = (ms) => `<span title="${esc(dtfFull.format(ms))}">${esc(dtf.format(ms))}</span>`;
+const LOG_FMT = { dt: (ms) => dtf.format(ms), day: (ms) => dayf.format(ms), hm: (ms) => hmf.format(ms), money, pct, ratio, tone };
+
+/* <log-lines> */
+/* The change log: program and preset changes read from each terminal's run record, and the operator's notes.
+   Wording and markup only, so tests/log_check.mjs lifts this block out and runs it as it is served.
+   Every string that comes from the snapshot goes through esc(): a note is typed by a person. */
+const logFor = (log, id) => (log || []).filter((e) => !id || e.accounts.includes(id));
+function logHeadline(entries, tail) {
+  if (!entries.length) return 'Nothing has been noted';
+  const changes = entries.filter((e) => e.kind === 'version').length, notes = entries.length - changes;
+  const parts = [changes ? `${word(changes)} program ${changes === 1 ? 'change' : 'changes'}` : '',
+                 notes ? `${word(notes)} ${notes === 1 ? 'note' : 'notes'}` : ''].filter(Boolean);
+  return `${cap(parts.join(' and '))} ${entries.length === 1 ? 'bears' : 'bear'} on ${tail}`;
+}
+function versionHeadline(a, entries, day) {
+  const v = (a.ea && a.ea.versions) || [];
+  if (v.length < 2) return logHeadline(entries, 'how this record reads');
+  const rows = a.by_version || [], cur = v[v.length - 1], name = (x) => esc(`${x.name} ${x.build}`.trim());
+  const own = rows.length ? rows[rows.length - 1].trades : 0, before = rows.slice(0, -1).reduce((n, r) => n + r.trades, 0);
+  const whose = v.length === 2 && rows.length === 2 ? name(v[0]) : 'earlier versions';
+  const head = `${name(cur)} has run since ${esc(day(cur.from_utc_ms))}`;
+  if (own) return `${head} and has closed ${pl(own, 'trade', 'trades')}; ${before ? `the ${before} before ${own === 1 ? 'it' : 'them'} belong${before === 1 ? 's' : ''} to ${whose}` : `none closed before ${own === 1 ? 'it' : 'them'}`}`;
+  return `${head}; ${!before ? 'no trade has closed yet' : before === 1 ? `the one closed trade so far belongs to ${whose}` : `all ${word(before)} closed trades so far belong to ${whose}`}`;
+}
+function logWhen(e, f) {
+  if (e.until_utc_ms == null) return f.dt(e.utc_ms);
+  return `${f.dt(e.utc_ms)} – ${f.day(e.utc_ms) === f.day(e.until_utc_ms) ? f.hm(e.until_utc_ms) : f.dt(e.until_utc_ms)}`;
+}
+function logRows(entries, titles, f, showWho) {
+  return entries.map((e) => {
+    const who = e.kind === 'version' ? '<span class="tag">run record</span>'
+      : e.all ? '<span class="log-who">All accounts</span>'
+      : showWho ? `<span class="log-who">${e.accounts.map((id) => esc(titles[id] || id)).join(' · ')}</span>` : '';
+    return `<div class="log-row"><div class="log-when">${esc(logWhen(e, f))}</div><div class="log-what"><b>${esc(e.title)}</b>${who}<p>${esc(e.text)}</p></div></div>`;
+  }).join('');
+}
+/* The account row on the overview: since when its version runs, once the account has changed version. */
+function sinceHint(a, f) {
+  const v = (a.ea && a.ea.versions) || [];
+  return v.length > 1 ? ` <span class="nw">· since ${esc(f.day(v[v.length - 1].from_utc_ms))}</span>` : '';
+}
+/* Closed trades by version. Not sortable and not a filter: two or three rows in the order they ran. A version with
+   no closed trade shows dashes, never a made-up 0 % or 0.00. Preset, win rate and ratio give way on a phone. */
+function versionTable(a, ccy, f) {
+  const rows = a.by_version || [];
+  if (rows.length < 2) return '';
+  const ran = (r) => esc(r.from_utc_ms == null ? `until ${f.dt(r.to_utc_ms)}`
+    : r.to_utc_ms == null ? `since ${f.dt(r.from_utc_ms)}` : `${f.dt(r.from_utc_ms)} – ${f.dt(r.to_utc_ms)}`);
+  const row = (r) => `<tr><td class="sym">${esc(r.name)}${r.preset ? `<small class="ver-pre">${esc(r.preset)}</small>` : ''}</td>`
+    + `<td class="ver-wide">${esc(r.preset) || '—'}</td><td class="ver-ran">${ran(r)}</td><td class="r">${esc(r.trades)}</td>`
+    + `<td class="r ver-wide">${r.trades ? f.pct(r.win_rate, false, 0) : '—'}</td><td class="r ver-wide">${r.trades ? f.ratio(r.profit_factor) : '—'}</td>`
+    + `<td class="r ${r.trades ? f.tone(r.net) : ''}"><b>${r.trades ? f.money(r.net, ccy, true) : '—'}</b></td></tr>`;
+  return '<table><thead><tr><th>Version</th><th class="ver-wide">Preset</th><th>Ran</th><th class="r">Trades</th>'
+    + `<th class="r ver-wide">Win rate</th><th class="r ver-wide">PF</th><th class="r">Net</th></tr></thead><tbody>${rows.map(row).join('')}</tbody></table>`;
+}
+/* </log-lines> */
 function ago(ms) {
   const s = Math.max(0, Math.round(ms / 1000));
   if (s < 5) return 'just now';
@@ -1866,6 +1947,7 @@ function renderBanner() {
     if (a.error) probs.push(`<b>${esc(a.title)} cannot be read.</b> ${esc(a.error)}`);
     else if (a.problems.length) probs.push(`<b>${esc(a.title)}:</b> ${a.problems.map(esc).join(' · ')}`);
   }
+  if (snap && snap.log_problems && snap.log_problems.length) probs.push(`<b>Notes:</b> ${snap.log_problems.map(esc).join(' · ')}`);
   const el = $('banner');
   if (!el) return;
   put('banner', probs.map((p) => `<div class="banner">${p}</div>`).join(''));
@@ -2248,6 +2330,7 @@ const overviewShell = () => `
   <section aria-label="Key portfolio metrics"><div class="strip" id="strip"></div></section>
   ${ex('book', '<span id="book-sub"></span>', '<div class="ctrl-bar" id="book-ctrl" hidden></div><div class="book" id="book"></div>', '<span id="book-src"></span>', 'id="book-sec"')}
   ${ex('roster', '<span id="roster-sub"></span>', '<div class="roster" id="roster"></div>', 'Source: each terminal’s run record and the broker’s deal history. Select any account row for its full report.', 'id="roster-sec"')}
+  ${ex('log', '<span id="log-sub"></span>', '<div class="log" id="log"></div>', 'Source: each terminal’s run record for program and preset changes; the other entries are the operator’s own notes.', 'id="log-sec" hidden')}
   ${ex('idx', '<span id="idx-sub"></span>', '<div class="chart-bar"><div class="legend" id="idx-legend"></div><div class="seg-ctrl" id="idx-range" role="group" aria-label="Chart timeframe"></div></div><div class="chart" id="idx"></div>', 'Source: account equity as reported by each terminal, sampled every minute. Click any account in the legend to toggle or rescale.', 'id="idx-sec"')}
   ${ex('latest', '<span id="latest-n"></span>', `${tradeCtrlHtml(true)}<div id="latest"></div>`, 'Source: the broker’s deal history. Net is after commission, swap and fees.', 'id="latest-sec"')}`;
 
@@ -2300,6 +2383,7 @@ function renderOverview() {
   put('ov-jumps', [
     openCnt || pending ? `<a class="jump-pill emph" href="#book-sec" data-jump="book-sec">Open book <span class="cnt">${openCnt}</span></a>` : '',
     `<a class="jump-pill" href="#roster-sec" data-jump="roster-sec">Accounts <span class="cnt">${snap.accounts.length}</span></a>`,
+    (snap.log || []).length ? `<a class="jump-pill" href="#log-sec" data-jump="log-sec">What changed <span class="cnt">${snap.log.length}</span></a>` : '',
     `<a class="jump-pill" href="#idx-sec" data-jump="idx-sec">Equity curve</a>`,
     `<a class="jump-pill" href="#latest-sec" data-jump="latest-sec">Closed trades <span class="cnt">${trades}</span></a>`,
   ].filter(Boolean).join(''));
@@ -2406,6 +2490,13 @@ function renderOverview() {
     `<b>How much to read into it.</b> ${cap(pl(trades, 'trade has', 'trades have'))} closed (${wins} won, ${losses} lost)${trades < 30 * ok.length ? ', too few to rely on win rate or profit factor yet' : ''}. ${dd ? `The deepest equity drawdown is ${P(dd.p, false)}, on ${esc(dd.a.title)}` : 'No account has drawn down'}; ${openCnt ? `${pl(openCnt, 'position is', 'positions are')} open now` : 'nothing is open now'}.`,
   ].map((t) => `<li>${t}</li>`).join(''));
 
+  /* change log */
+  const logEntries = logFor(snap.log, null);
+  $('log-sec').hidden = !logEntries.length;
+  put('log-t', logHeadline(logEntries, 'how these figures read'));
+  put('log-sub', 'Program and preset changes, and the operator’s notes on what the figures alone do not say; newest first');
+  put('log', logRows(logEntries, Object.fromEntries(snap.accounts.map((a) => [a.id, a.title])), LOG_FMT, true));
+
   /* account roster */
   put('roster-t', !ok.length ? 'Which system each account runs'
     : systems.length === 1 ? (ok.length === 1 ? `The account runs ${esc(systems[0])} on the ${esc(ok[0].ea.preset)} preset` : `${cap(word(ok.length))} accounts run ${esc(systems[0])}, ${presets.size === ok.length ? 'each on its own preset' : 'across ' + pl(presets.size, 'preset', 'presets')}`)
@@ -2422,7 +2513,7 @@ function renderOverview() {
         <div class="acct-name"><b>${esc(a.title)}</b><span class="num">••${esc(a.login_tail)}</span></div>
         <div class="acct-id">${esc(a.server)} · ${esc(a.currency)}${conv ? ` → ${esc(R)}` : ''} · 1:${a.leverage} · ${esc(a.mode)} · ${esc(a.terminal)}</div>
         <div class="runs">
-          <div class="ea">${esc(a.ea.name)} <span>${esc(a.ea.build)} · preset</span> ${esc(a.ea.preset)} <span class="nw">· ${esc(a.ea.chart)}</span></div>
+          <div class="ea">${esc(a.ea.name)} <span>${esc(a.ea.build)} · preset</span> ${esc(a.ea.preset)} <span class="nw">· ${esc(a.ea.chart)}</span>${sinceHint(a, LOG_FMT)}</div>
           <div class="chips">${on.map((e) => `<span class="chip">${esc(e.name)} <span class="num">#${e.magic}</span></span>`).join('') || '<span class="chip off">no engine switched on</span>'}</div>
         </div>
       </div>
@@ -2528,6 +2619,7 @@ const accountShell = () => `
   ${ex('perf', '<span id="perf-note"></span>', '<div class="kpis-hero" id="kpis-hero"></div><div class="kpis" id="kpis"></div>', 'Source: the broker’s deal history. A trade is one position, counted when it is fully closed; a win is a net above zero.', 'id="perf-sec"')}
   ${ex('eq', '<span id="eq-sub"></span>', '<div class="chart-bar"><div class="legend" id="eq-legend"></div><div class="seg-ctrl" id="eq-range" role="group" aria-label="Chart timeframe"></div></div><div class="chart" id="eq"></div>', 'Source: account equity and balance as reported by the terminal.', 'id="eq-sec"')}
   ${ex('by', 'Net result by engine and by symbol, in the account’s currency. Click any row to filter the ledger below.', '<div class="two"><div class="tbl" id="by-engine"></div><div class="tbl" id="by-symbol"></div></div>', 'Source: the broker’s deal history. An engine is identified by its magic number.', 'id="by-sec"')}
+  ${ex('ver', '<span id="ver-sub"></span>', '<div class="tbl" id="ver-tbl" hidden></div><div class="log" id="ver-log"></div>', 'Source: the terminal’s run record (the program and preset files, told apart by their hashes) and the operator’s own notes. An order an earlier version left resting counts under the version running when it fills.', 'id="ver-sec" hidden')}
   ${ex('days', 'Net result of the trades closed on each broker day', '<div class="day-stats" id="day-stats"></div><div class="chart" id="days"></div>', 'Source: the broker’s deal history, grouped by the broker’s calendar day.', 'id="days-sec"')}
   ${ex('book', '<span id="book-sub"></span>', '<div class="ctrl-bar" id="book-ctrl" hidden></div><div class="book" id="book"></div>', '<span id="book-src"></span>', 'id="book-sec"')}
   ${ex('ledger', '<span id="ledger-n"></span>', `${tradeCtrlHtml(false)}<div id="ledger"></div>`, 'Source: the broker’s deal history. Costs are commission, swap and fees.', 'id="ledger-sec"')}`;
@@ -2542,6 +2634,7 @@ function groupTable(rows, ccy, label, kind) {
   }).join('')}</tbody></table>`;
 }
 
+/* Which version has run since when: shown only where an account has had more than one. */
 function renderAccount(a, i) {
   const c = SERIES[i % SERIES.length];
   if (a.error) { put('hero', `<div><a class="crumb" href="#overview">← Overview</a><div class="eyebrow">${esc(a.terminal)} · ••${esc(a.login_tail)}</div><h1>${esc(a.title)}</h1><p class="loss">This account's files cannot be read: ${esc(a.error)}</p></div><div></div>`); return; }
@@ -2549,6 +2642,7 @@ function renderAccount(a, i) {
   const brokerDay = new Date(serverNow() + a.status.offset_h * 3600e3).toISOString().slice(0, 10);
   const today = a.daily.find((d) => d.day === brokerDay) || { net: 0, trades: 0 }, lastT = a.trades[a.trades.length - 1];
   const onEng = a.ea.engines.filter((e) => e.enabled), offEng = a.ea.engines.filter((e) => !e.enabled);
+  const entries = logFor(snap.log, a.id), vers = a.ea.versions || [], prev = vers.length > 1 ? vers[vers.length - 2] : null;
 
   put('hero', `
     <div>
@@ -2581,7 +2675,7 @@ function renderAccount(a, i) {
         <dt>Preset</dt><dd><b>${esc(a.ea.preset)}</b> <span class="sha">${esc(a.ea.set_sha)}</span>${a.ea.set_overrides ? ` · ${a.ea.set_overrides} override(s)` : ' · unchanged'}</dd>
         <dt>Chart</dt><dd>${esc(a.ea.chart)} · ${esc(a.terminal)}</dd>
         <dt>Account</dt><dd>${esc(ccy)} · 1:${a.leverage} · ${esc(a.mode)}${a.hedging ? ' · hedging' : ''}${a.ea.demo_only ? ' · real trading locked off' : ''}</dd>
-        <dt>Started</dt><dd>${when(a.ea.started_utc_ms)}</dd>
+        <dt>Started</dt><dd>${when(a.ea.started_utc_ms)}${prev ? ` · <a href="#ver-sec" data-jump="ver-sec">${esc(`${prev.name} ${prev.build}`.trim())} before ↓</a>` : ''}</dd>
       </dl>
       <div class="eng-sec">
         <div class="eyebrow" style="margin-bottom:8px">Active engines (${onEng.length})</div>
@@ -2594,6 +2688,7 @@ function renderAccount(a, i) {
     `<a class="jump-pill" href="#perf-sec" data-jump="perf-sec">Statistics</a>`,
     `<a class="jump-pill" href="#eq-sec" data-jump="eq-sec">Equity curve</a>`,
     `<a class="jump-pill" href="#by-sec" data-jump="by-sec">By engine &amp; symbol</a>`,
+    entries.length || prev ? `<a class="jump-pill" href="#ver-sec" data-jump="ver-sec">${prev ? 'Versions &amp; notes' : 'Notes'}${entries.length ? ` <span class="cnt">${entries.length}</span>` : ''}</a>` : '',
     `<a class="jump-pill" href="#days-sec" data-jump="days-sec">Daily P&amp;L</a>`,
     a.open.length || a.status.pending ? `<a class="jump-pill emph" href="#book-sec" data-jump="book-sec">Open book <span class="cnt">${a.open.length}</span></a>` : '',
     `<a class="jump-pill" href="#ledger-sec" data-jump="ledger-sec">Trade ledger <span class="cnt">${a.trades.length}</span></a>`,
@@ -2647,6 +2742,16 @@ function renderAccount(a, i) {
   put('by-t', !topEng ? 'No engine has closed a trade yet' : topEng.net > 0 ? `${esc(topEng.name)} is the largest contributor at ${M(topEng.net, ccy, true)}${topSym && a.by_symbol.length > 1 && topSym.net > 0 ? `; ${esc(topSym.name)} is the strongest symbol` : ''}` : 'No engine is ahead yet');
   put('by-engine', groupTable(a.by_engine, ccy, 'Engine', 'engine'));
   put('by-symbol', groupTable(a.by_symbol, ccy, 'Symbol', 'symbol'));
+
+  /* versions & notes */
+  $('ver-sec').hidden = !entries.length && !prev;
+  put('ver-t', versionHeadline(a, entries, LOG_FMT.day));
+  put('ver-sub', prev ? 'Closed trades by program version, then what else bears on this record. A trade is counted under the version running when it opened'
+    : 'What the figures alone do not say about this record; newest first');
+  const verTable = versionTable(a, ccy, LOG_FMT);
+  put('ver-tbl', verTable);
+  $('ver-tbl').hidden = !verTable;
+  put('ver-log', logRows(entries, {}, LOG_FMT, false));
 
   /* daily bars */
   const bestDay = a.daily.reduce((b, d) => (!b || d.net > b.net ? d : b), null);
